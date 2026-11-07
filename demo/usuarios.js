@@ -4,6 +4,8 @@ export const USUARIOS_DEMO = [
   { uid: 'u-jluna', nombre: 'Juan Luna', rol: 'chofer', color: '#b3407d', pin: '222222' },
   { uid: 'u-dgarcia', nombre: 'David García', rol: 'chofer', color: '#2e8a57', pin: '333333' },
   { uid: 'u-alexis', nombre: 'Alexis', rol: 'chofer', color: '#c2650f', pin: '444444' },
+  // Cupo de reserva: lo usa quien reemplace a un chófer que no esté disponible ese día.
+  { uid: 'u-extra', nombre: 'Extra (reserva)', rol: 'chofer', color: '#6a7480', pin: '777777' },
   { uid: 'u-antonio', nombre: 'Don Antonio', rol: 'oficina', color: '#5a4fb0', pin: '555555' },
   { uid: 'u-yulissa', nombre: 'Yulissa', rol: 'oficina', color: '#0f8a8a', pin: '666666' },
   // No es una persona: es donde se deja un pedido que un chófer no puede entregar, para que otro lo tome.

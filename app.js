@@ -597,7 +597,11 @@ section.pag{padding-top:28px;border-top:3px dashed #999;margin-top:28px}
 }
 function pdfTraspasosHTML(uid) { return documentoTraspasos('Control de traspasos · ' + nombreDe(uid), seccionTrasChofer(uid, false)); }
 function pdfTraspasosTodosHTML() {
-  const cuerpo = choferes().map((ch, i) => seccionTrasChofer(ch.uid, i > 0)).join('');
+  // Solo los chóferes que tienen algo: así no salen hojas vacías de los que no reparten ese día.
+  const conAlgo = choferes().filter(ch => { const d = datosTrasChofer(ch.uid); return d.dar.length || d.recibir.length; });
+  const cuerpo = conAlgo.length
+    ? conAlgo.map((ch, i) => seccionTrasChofer(ch.uid, i > 0)).join('')
+    : `<h1>Control de traspasos</h1><p class="sub">${fmtF(fecha)} (${diaF(fecha)})</p><p class="vacio">Hoy no hay traspasos entre chóferes.</p>`;
   return documentoTraspasos('Control de traspasos · Todos', cuerpo);
 }
 function abrirDoc(html) {
@@ -625,7 +629,7 @@ function renderTraspasos() {
   const T = traspasos();
   let h = '';
   if (esChofer()) h += `<div class="btnrow" style="margin-bottom:4px"><button type="button" class="btn ghost sm" data-pdf="${esc(yo.uid)}">📄 PDF de mis traspasos</button></div>`;
-  else h += `<div class="btnrow" style="margin-bottom:4px"><button type="button" class="btn sm" data-pdf-todos="1">📄 PDF de todos los chóferes</button>${choferes().map(ch => `<button type="button" class="btn ghost sm" data-pdf="${esc(ch.uid)}">📄 ${esc(ch.nombre)}</button>`).join('')}</div>`;
+  else h += `<div class="btnrow" style="margin-bottom:4px"><button type="button" class="btn sm" data-pdf-todos="1">📄 PDF de todos los chóferes</button>${choferes().filter(ch => !esUrgente(ch.uid)).map(ch => `<button type="button" class="btn ghost sm" data-pdf="${esc(ch.uid)}">📄 ${esc(ch.nombre)}</button>`).join('')}</div>`;
   if (T.sinAlm || T.sinCli) h += `<div class="warnbox">Faltan asignaciones: ${T.sinAlm ? `<b>${T.sinAlm}</b> productos de almacenes sin chófer` : ''}${T.sinAlm && T.sinCli ? ' y ' : ''}${T.sinCli ? `<b>${T.sinCli}</b> productos de clientes sin chófer` : ''}. Hasta completarlas, los traspasos no estarán completos.</div>`;
   const agrupar = (arr, key) => { const m = new Map(); arr.forEach(t => { if (!m.has(t[key])) m.set(t[key], []); m.get(t[key]).push(t); }); return [...m.entries()]; };
   if (esChofer()) {
