@@ -498,7 +498,7 @@ function saveRep(pr, p, patch) {
   if (!fecha) return;
   const antes = grupoListo(2, pr.g);
   const cur = rep[pr.k] || { cli: {} };
-  const merged = { ...((cur.cli || {})[p] || {}), ...patch };
+  const merged = { ...((cur.cli || {})[p] || {}), ...patch, ts: ahora(), por: yo ? yo.uid : null };
   rep[pr.k] = { ...cur, cli: { ...(cur.cli || {}), [p]: merged } };
   refreshAll();
   if (!antes && grupoListo(2, pr.g)) programarSiguiente(2, pr.g);
@@ -523,7 +523,7 @@ function marcarTodoSeparado(g) {
   const antes = grupoListo(2, g), f = firma();
   lote.forEach(({ pr, as }) => {
     const cur = rep[pr.k] || { cli: {} }, cli = { ...(cur.cli || {}) }, cambios = {};
-    as.forEach(a => { cli[a.p] = { ...(cli[a.p] || {}), ok: true }; cambios[a.p] = cli[a.p]; });
+    as.forEach(a => { cli[a.p] = { ...(cli[a.p] || {}), ok: true, ts: f.ts, por: f.uid }; cambios[a.p] = cli[a.p]; });
     rep[pr.k] = { ...cur, cli };
     const ref = doc(db, 'dias', fecha, 'reparto', pr.k);
     const body = { codigo: pr.c, ...f, cli: cambios };
@@ -892,7 +892,53 @@ $('#copiar').addEventListener('click', () => {
 });
 
 /* ================= OFICINA ================= */
+/* ---- Control de tiempos (solo oficina): a qué hora marcó cada quien cada cosa ---- */
+// Las horas se muestran en hora de Canarias, que es donde trabajan los chóferes.
+const horaCan = ts => { try { return new Date(ts).toLocaleTimeString('es-ES', { timeZone: 'Atlantic/Canary', hour: '2-digit', minute: '2-digit' }); } catch (e) { return '--:--'; } };
+function eventos() {
+  const ev = [], prod = k => (dia ? dia.productos.find(p => p.k === k) : null);
+  const add = (ts, quien, txt) => { if (ts && quien) ev.push({ ts, quien, txt }); };
+  Object.entries(rec).forEach(([k, m]) => {
+    const pr = prod(k); if (!pr) return;
+    const est = m.estado === 'si' ? 'Tengo' : m.estado === 'no' ? 'No hay' : m.estado === 'parcial' ? `Faltan algunas (hay ${fmtQ(m.quedan ?? 0)})` : 'Nota';
+    add(m.ts, m.uid, `Recogida · ${pr.g} ${pr.c} ${pr.d} — ${est}`);
+  });
+  Object.entries(rep).forEach(([k, m]) => {
+    const pr = prod(k); if (!pr) return;
+    Object.entries(m.cli || {}).forEach(([p, c]) => {
+      const cli = (cliBy[p] || {}).nombre || p;
+      add(c.ts, c.por, `Reparto · ${pr.c} ${pr.d} — ${c.ok ? 'separado' : 'actualizado'} para ${cli}`);
+    });
+    if (!Object.values(m.cli || {}).some(c => c.ts)) add(m.ts, m.uid, `Reparto · ${pr.c} ${pr.d}`);
+  });
+  Object.entries(asig).forEach(([n, a]) => add(a.ts, a.uid, `Clientes · tomó el cliente ${n}${a.chofer && a.chofer !== a.uid ? ' → ' + nombreDe(a.chofer) : ''}`));
+  Object.entries(tras).forEach(([id, t]) => { const pr = prod(String(id).split('__')[0]); add(t.ts, t.uid, `Traspasos · entregó ${pr ? pr.d : id}`); });
+  Object.entries(almDia).forEach(([g, a]) => add(a.ts, a.uid, `Oficina · asignó el almacén ${g} a ${a.chofer ? nombreDe(a.chofer) : 'nadie'}`));
+  return ev.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+}
+function renderTiempos() {
+  const box = $('#tiempos'); if (!box) return;
+  const head = '<span class="lbl">Control de tiempos</span><p class="hint" style="margin:0 0 6px">A qué hora marcó cada quien, en hora de Canarias. Solo lo ve oficina.</p>';
+  if (!dia) { box.innerHTML = head + '<p class="hint" style="margin:0">Cuando se cargue el día aparecerán las marcas.</p>'; return; }
+  const ev = eventos();
+  if (!ev.length) { box.innerHTML = head + '<p class="hint" style="margin:0">Todavía nadie ha marcado nada hoy.</p>'; return; }
+  const porQuien = agruparPor(ev, 'quien');
+  box.innerHTML = head + porQuien.map(([uid, list]) => {
+    const abierto = tiemposAbierto.has(uid);
+    return `<h3>${chipChof(uid)} · ${list.length} marca${list.length === 1 ? '' : 's'} · ${horaCan(list[0].ts)} a ${horaCan(list[list.length - 1].ts)}</h3>`
+      + `<div class="btnrow" style="margin:0 0 8px"><button type="button" class="btn ghost sm" data-tiempos="${esc(uid)}">${abierto ? 'Ocultar detalle' : 'Ver detalle'}</button></div>`
+      + (abierto ? '<ul>' + list.map(x => `<li><span class="t">${horaCan(x.ts)}</span><span class="m">${esc(x.txt)}</span></li>`).join('') + '</ul>' : '');
+  }).join('');
+}
+const tiemposAbierto = new Set();
+$('#tiempos').addEventListener('click', e => {
+  const b = e.target.closest('[data-tiempos]'); if (!b) return;
+  const uid = b.dataset.tiempos;
+  tiemposAbierto.has(uid) ? tiemposAbierto.delete(uid) : tiemposAbierto.add(uid);
+  renderTiempos();
+});
 function renderOficina() {
+  renderTiempos();
   // Almacenes del día
   const box = $('#almacenes');
   if (!dia) box.innerHTML = '<p class="small">Cuando se cargue el día aparecerán sus almacenes.</p>';
