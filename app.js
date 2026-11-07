@@ -331,8 +331,11 @@ function renderClientes() {
   root.innerHTML = vis.map(c => {
     const ch = chofCli(c.n), mio = yo && ch === yo.uid, alms = almsDe(c);
     let acc = '';
-    if (!ch || esUrgente(ch)) acc = (esChofer() ? `<button type="button" class="btn sm${esUrgente(ch) ? ' urgente' : ''}" data-tomar="${esc(c.n)}">${esUrgente(ch) ? '🚨 Lo tomo yo' : 'Lo llevo yo'}</button>` : '') + (esOficina() ? `<select class="pasar" data-n="${esc(c.n)}" aria-label="Asignar a">${opts(ch, 'Asignar a…')}</select>` : '');
-    else if (mio || esOficina()) acc = `<button type="button" class="btn ghost sm" data-soltar="${esc(c.n)}">Soltar</button><select class="pasar" data-n="${esc(c.n)}" aria-label="Pasar a">${opts(ch, 'Pasar a…')}</select>`;
+    if (!ch || esUrgente(ch)) acc = (esChofer() ? `<button type="button" class="btn sm${esUrgente(ch) ? ' urgente' : ''}" data-tomar="${esc(c.n)}">${esUrgente(ch) ? '🚨 Lo tomo yo' : 'Lo llevo yo'}</button>` : '')
+      + (esUrgente(ch) && (esChofer() || esOficina()) ? `<button type="button" class="btn ghost sm" data-soltar="${esc(c.n)}">Sacar de Urgente</button>` : '')
+      + (esOficina() ? `<select class="pasar" data-n="${esc(c.n)}" aria-label="Asignar a">${opts(ch, 'Asignar a…')}</select>` : '');
+    // Quien lleva el cliente (o la oficina) puede dejarlo en Urgente si no lo puede entregar, para que otro lo tome.
+    else if (mio || esOficina()) acc = `<button type="button" class="btn sm urgente" data-urgente="${esc(c.n)}">🚨 Pasar a Urgente</button><button type="button" class="btn ghost sm" data-soltar="${esc(c.n)}">Soltar</button><select class="pasar" data-n="${esc(c.n)}" aria-label="Pasar a">${opts(ch, 'Pasar a…')}</select>`;
     return `<article class="clie${ch ? ' asignado' : ''}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
       <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><span class="qty">${lineasDe(c)} productos</span></div>
       <p class="desc">${esc(c.nombre)}</p>
@@ -358,6 +361,8 @@ async function asignarCliente(n, para, { soloSiLibre = false } = {}) {
 $('#lista3').addEventListener('click', async e => {
   const t = e.target.closest('[data-tomar]');
   if (t) { t.disabled = true; if (await asignarCliente(t.dataset.tomar, yo.uid, { soloSiLibre: true })) toast('✓ Cliente asignado a ti'); t.disabled = false; return; }
+  const u = e.target.closest('[data-urgente]');
+  if (u) { u.disabled = true; if (await asignarCliente(u.dataset.urgente, URGENTE_UID)) toast('🚨 Queda en Urgente: otro chófer lo puede tomar'); u.disabled = false; return; }
   const s = e.target.closest('[data-soltar]');
   if (s) { if (await asignarCliente(s.dataset.soltar, null)) toast('Cliente liberado'); }
 });
