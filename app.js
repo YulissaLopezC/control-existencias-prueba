@@ -545,13 +545,21 @@ function bloqueTrasHTML(de, para, items) {
   </table>`;
 }
 function agruparPor(arr, key) { const m = new Map(); arr.forEach(t => { if (!m.has(t[key])) m.set(t[key], []); m.get(t[key]).push(t); }); return [...m.entries()]; }
-function pdfTraspasosHTML(uid) {
+function seccionTrasChofer(uid, saltoPagina) {
   const { dar, recibir } = datosTrasChofer(uid);
   let cuerpo = `<h2>Entrega</h2>` + (dar.length ? agruparPor(dar, 'para').map(([para, it]) => bloqueTrasHTML(uid, para, it)).join('') : '<p class="vacio">No tiene nada que entregar a otros chóferes.</p>');
   cuerpo += `<h2>Recibe</h2>` + (recibir.length ? agruparPor(recibir, 'de').map(([de, it]) => bloqueTrasHTML(de, uid, it)).join('') : '<p class="vacio">No tiene nada que recibir de otros chóferes.</p>');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Control de traspasos · ${esc(nombreDe(uid))}</title>
+  return `<section${saltoPagina ? ' class="pag"' : ''}>
+<h1>Control de traspasos · ${esc(nombreDe(uid))}</h1>
+<p class="sub">${fmtF(fecha)} (${diaF(fecha)})</p>
+${cuerpo}
+</section>`;
+}
+function documentoTraspasos(titulo, cuerpoHTML) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title>
 <style>
-body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111;max-width:700px;margin:0 auto}
+body{font-family:Arial,Helvetica,sans-serif;padding:0;color:#111}
+.wrap{max-width:700px;margin:0 auto;padding:16px 24px 24px}
 h1{font-size:1.3rem;margin:0 0 2px} .sub{color:#555;margin:0 0 20px}
 h2{font-size:1.05rem;margin:22px 0 8px;border-bottom:2px solid #333;padding-bottom:4px}
 .vacio{color:#777;font-style:italic}
@@ -559,19 +567,34 @@ table.tb{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:.92rem
 table.tb caption{text-align:left;font-weight:700;padding:6px 8px;background:#eee}
 table.tb th,table.tb td{border:1px solid #ccc;padding:5px 8px;text-align:left}
 table.tb tr.tot td{font-weight:700;background:#f7f7f7;border-top:2px solid #333}
-@media print{body{padding:0;max-width:none}}
+section.pag{padding-top:28px;border-top:3px dashed #999;margin-top:28px}
+.barra{position:sticky;top:0;display:flex;gap:8px;align-items:center;padding:10px 16px;background:#1b1f24;color:#fff}
+.barra button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:10px 14px;min-height:44px}
+.barra .volver{background:#3a4048;color:#fff}
+.barra .imprimir{background:#2e8a57;color:#fff;margin-left:auto}
+.barra .hint{font-size:.8rem;color:#c9ced3;width:100%;margin-top:2px}
+@media print{.barra{display:none} section.pag{border-top:0;margin-top:0;padding-top:0;page-break-before:always}}
 </style></head><body>
-<h1>Control de traspasos · ${esc(nombreDe(uid))}</h1>
-<p class="sub">${fmtF(fecha)} (${diaF(fecha)})</p>
-${cuerpo}
+<div class="barra" id="barra">
+  <button type="button" class="volver" onclick="(window.close(),history.length>1&&history.back())">← Volver</button>
+  <button type="button" class="imprimir" onclick="print()">🖨️ Descargar / Imprimir</button>
+  <span class="hint">Para guardar como PDF: toca «Descargar / Imprimir» y elige «Guardar como PDF».</span>
+</div>
+<div class="wrap">${cuerpoHTML}</div>
 </body></html>`;
 }
-function imprimirTraspasos(uid) {
+function pdfTraspasosHTML(uid) { return documentoTraspasos('Control de traspasos · ' + nombreDe(uid), seccionTrasChofer(uid, false)); }
+function pdfTraspasosTodosHTML() {
+  const cuerpo = choferes().map((ch, i) => seccionTrasChofer(ch.uid, i > 0)).join('');
+  return documentoTraspasos('Control de traspasos · Todos', cuerpo);
+}
+function abrirDoc(html) {
   const w = window.open('', '_blank');
   if (!w) { toast('El navegador bloqueó la ventana. Permite ventanas emergentes para descargar el PDF.'); return; }
-  w.document.open(); w.document.write(pdfTraspasosHTML(uid)); w.document.close();
-  w.addEventListener('load', () => { w.focus(); w.print(); });
+  w.document.open(); w.document.write(html); w.document.close();
 }
+function imprimirTraspasos(uid) { abrirDoc(pdfTraspasosHTML(uid)); }
+function imprimirTraspasosTodos() { abrirDoc(pdfTraspasosTodosHTML()); }
 function grupoTrasHTML(titulo, uid, items, puedeMarcar) {
   const hechos = items.filter(t => trasOk(t.id)).length, comp = hechos === items.length;
   return `<section class="sec tras${comp ? ' completo' : ''}">
@@ -590,7 +613,7 @@ function renderTraspasos() {
   const T = traspasos();
   let h = '';
   if (esChofer()) h += `<div class="btnrow" style="margin-bottom:4px"><button type="button" class="btn ghost sm" data-pdf="${esc(yo.uid)}">📄 PDF de mis traspasos</button></div>`;
-  else h += `<div class="btnrow" style="margin-bottom:4px">${choferes().map(ch => `<button type="button" class="btn ghost sm" data-pdf="${esc(ch.uid)}">📄 ${esc(ch.nombre)}</button>`).join('')}</div>`;
+  else h += `<div class="btnrow" style="margin-bottom:4px"><button type="button" class="btn sm" data-pdf-todos="1">📄 PDF de todos los chóferes</button>${choferes().map(ch => `<button type="button" class="btn ghost sm" data-pdf="${esc(ch.uid)}">📄 ${esc(ch.nombre)}</button>`).join('')}</div>`;
   if (T.sinAlm || T.sinCli) h += `<div class="warnbox">Faltan asignaciones: ${T.sinAlm ? `<b>${T.sinAlm}</b> productos de almacenes sin chófer` : ''}${T.sinAlm && T.sinCli ? ' y ' : ''}${T.sinCli ? `<b>${T.sinCli}</b> productos de clientes sin chófer` : ''}. Hasta completarlas, los traspasos no estarán completos.</div>`;
   const agrupar = (arr, key) => { const m = new Map(); arr.forEach(t => { if (!m.has(t[key])) m.set(t[key], []); m.get(t[key]).push(t); }); return [...m.entries()]; };
   if (esChofer()) {
@@ -611,6 +634,7 @@ function marcarTras(ids, ok) {
   renderTraspasos(); renderStats();
 }
 $('#lista4').addEventListener('click', e => {
+  if (e.target.closest('[data-pdf-todos]')) { imprimirTraspasosTodos(); return; }
   const pdf = e.target.closest('[data-pdf]'); if (pdf) { imprimirTraspasos(pdf.dataset.pdf); return; }
   const b = e.target.closest('[data-tras]'); if (b) { marcarTras([b.dataset.tras], !trasOk(b.dataset.tras)); return; }
   const t = e.target.closest('[data-tras-todo]'); if (t) marcarTras(t.dataset.trasTodo.split(','), true);
