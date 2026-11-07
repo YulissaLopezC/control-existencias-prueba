@@ -6,7 +6,7 @@
 <title>Control de Existencias Viña</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="styles.css?v=23">
+<link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
 <div class="demo-banner" id="demo-banner" hidden>
@@ -76,11 +76,13 @@
   <!-- 2 CLIENTES -->
   <section id="v-clientes" class="wrap" hidden>
     <div class="card cuenta-chof" id="cuenta-chof"></div>
+    <p class="warnbox" id="aviso-urgente" hidden></p>
     <div class="tools">
       <input class="field" id="buscar3" type="search" placeholder="Buscar cliente o pedido">
       <div class="chips" role="group" aria-label="Filtro" data-for="3">
         <button class="chip" data-f="sin" aria-pressed="true">Sin asignar</button>
         <button class="chip" data-f="mios" aria-pressed="false">Míos</button>
+        <button class="chip urgente" data-f="urgente" aria-pressed="false">🚨 Urgente</button>
         <button class="chip" data-f="todos" aria-pressed="false">Todos</button>
       </div>
     </div>
@@ -175,6 +177,6 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="app.js?v=25"></script>
+<script type="module" src="app.js?v=26"></script>
 </body>
 </html>

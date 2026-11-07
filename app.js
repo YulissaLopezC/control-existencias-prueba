@@ -30,9 +30,12 @@ const ambito = { 1: 'mios', 2: 'mios' };
 const esOficina = () => !!yo && yo.rol === 'oficina';
 const esChofer = () => !!yo && yo.rol === 'chofer';
 const choferes = () => Object.entries(usuarios).filter(([, u]) => u.rol === 'chofer').sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9)).map(([uid, u]) => ({ uid, ...u }));
+// «Urgente» no es una persona: es donde se deja un pedido que un chófer no puede entregar, para que otro lo tome.
+const URGENTE_UID = 'u-urgente';
+const esUrgente = uid => uid === URGENTE_UID;
 const nombreDe = uid => (usuarios[uid] || {}).nombre || 'otro chófer';
 const colorDe = uid => (usuarios[uid] || {}).color || 'var(--muted)';
-const chipChof = (uid, txt) => uid ? `<span class="chof" style="--c:${esc(colorDe(uid))}"><i></i>${esc(txt || nombreDe(uid))}</span>` : `<span class="chof sin"><i></i>${esc(txt || 'Sin asignar')}</span>`;
+const chipChof = (uid, txt) => uid ? `<span class="chof${esUrgente(uid) ? ' urgente' : ''}" style="--c:${esc(colorDe(uid))}"><i></i>${esc(txt || nombreDe(uid))}</span>` : `<span class="chof sin"><i></i>${esc(txt || 'Sin asignar')}</span>`;
 const firma = () => ({ nombre: yo ? yo.nombre : '', uid: yo ? yo.uid : null, ts: ahora() });
 function errGuardar(e) { console.error(e); toast(e && e.code === 'permission-denied' ? 'Sin permiso para guardar' : 'No se guardó. Revisa la conexión'); }
 function errConexion(e) { console.error(e); toast('No se pudo conectar con la base de datos'); }
@@ -75,7 +78,7 @@ onSnapshot(collection(db, 'usuarios'), snap => {
   renderQuien(); resolverYo(); refreshAll();
 }, errConexion);
 function renderQuien() {
-  const lista = Object.entries(usuarios).sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9));
+  const lista = Object.entries(usuarios).filter(([, u]) => !u.sinLogin).sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9));
   $('#quien').innerHTML = lista.length
     ? lista.map(([uid, u]) => `<button type="button" class="quien-b" data-uid="${esc(uid)}" style="--c:${esc(u.color || '#5b6876')}"><i></i><span>${esc(u.nombre)}</span><small>${u.rol === 'oficina' ? 'Oficina' : 'Chófer'}${DEMO && u.pinDemo ? ' · PIN ' + esc(u.pinDemo) : ''}</small></button>`).join('')
     : '<p class="small">Todavía no hay usuarios creados.</p>';
@@ -313,19 +316,22 @@ function renderClientes() {
   cls.forEach(c => { const ch = chofCli(c.n); if (ch) cuenta[ch] = (cuenta[ch] || 0) + 1; else sin++; });
   cont.hidden = false;
   cont.innerHTML = `<span class="lbl">Clientes del día · ${cls.length}</span><div class="cuenta">${choferes().map(ch => `<span>${chipChof(ch.uid)} <b>${cuenta[ch.uid] || 0}</b></span>`).join('')}<span>${chipChof(null)} <b class="${sin ? 'no' : ''}">${sin}</b></span></div>`;
+  const urg = cuenta[URGENTE_UID] || 0;
+  $('#aviso-urgente').hidden = !urg;
+  if (urg) $('#aviso-urgente').innerHTML = `🚨 Hay <b>${urg}</b> cliente${urg === 1 ? '' : 's'} en <b>Urgente</b> esperando que alguien lo${urg === 1 ? '' : 's'} tome. ${esChofer() ? 'Toca «Urgente» abajo.' : ''}`;
   const q = busq[3].toLowerCase(), f = filtro[3];
   const vis = cls.filter(c => {
     const ch = chofCli(c.n);
-    const okF = f === 'todos' || (f === 'sin' && !ch) || (f === 'mios' && yo && ch === yo.uid);
+    const okF = f === 'todos' || (f === 'sin' && !ch) || (f === 'mios' && yo && ch === yo.uid) || (f === 'urgente' && esUrgente(ch));
     const okQ = !q || c.nombre.toLowerCase().includes(q) || c.n.includes(q) || c.pedidos.some(p => p.includes(q));
     return okF && okQ;
   });
-  if (!vis.length) { root.innerHTML = `<div class="empty"><p>${f === 'sin' ? '✓ Todos los clientes tienen chófer.' : f === 'mios' ? 'Todavía no has tomado clientes. Ve a «Sin asignar» y toca «Lo llevo yo».' : 'No hay clientes que coincidan.'}</p></div>`; return; }
+  if (!vis.length) { root.innerHTML = `<div class="empty"><p>${f === 'sin' ? '✓ Todos los clientes tienen chófer.' : f === 'mios' ? 'Todavía no has tomado clientes. Ve a «Sin asignar» y toca «Lo llevo yo».' : f === 'urgente' ? 'No hay nadie en Urgente ahora mismo.' : 'No hay clientes que coincidan.'}</p></div>`; return; }
   const opts = (sel, txt) => `<option value="">${txt}</option>` + choferes().filter(ch => ch.uid !== sel).map(ch => `<option value="${esc(ch.uid)}">${esc(ch.nombre)}</option>`).join('');
   root.innerHTML = vis.map(c => {
     const ch = chofCli(c.n), mio = yo && ch === yo.uid, alms = almsDe(c);
     let acc = '';
-    if (!ch) acc = (esChofer() ? `<button type="button" class="btn sm" data-tomar="${esc(c.n)}">Lo llevo yo</button>` : '') + (esOficina() ? `<select class="pasar" data-n="${esc(c.n)}" aria-label="Asignar a">${opts(null, 'Asignar a…')}</select>` : '');
+    if (!ch || esUrgente(ch)) acc = (esChofer() ? `<button type="button" class="btn sm${esUrgente(ch) ? ' urgente' : ''}" data-tomar="${esc(c.n)}">${esUrgente(ch) ? '🚨 Lo tomo yo' : 'Lo llevo yo'}</button>` : '') + (esOficina() ? `<select class="pasar" data-n="${esc(c.n)}" aria-label="Asignar a">${opts(ch, 'Asignar a…')}</select>` : '');
     else if (mio || esOficina()) acc = `<button type="button" class="btn ghost sm" data-soltar="${esc(c.n)}">Soltar</button><select class="pasar" data-n="${esc(c.n)}" aria-label="Pasar a">${opts(ch, 'Pasar a…')}</select>`;
     return `<article class="clie${ch ? ' asignado' : ''}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
       <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><span class="qty">${lineasDe(c)} productos</span></div>
@@ -341,8 +347,9 @@ async function asignarCliente(n, para, { soloSiLibre = false } = {}) {
     await runTransaction(db, async tx => {
       const s = await tx.get(ref); const cur = s.exists() ? s.data() : null;
       const dueño = cur && cur.chofer;
-      if (dueño && soloSiLibre && dueño !== yo.uid) { const e = new Error('ocupado'); e.code = 'ocupado'; e.quien = dueño; throw e; }
-      if (dueño && !soloSiLibre && dueño !== yo.uid && !esOficina()) { const e = new Error('ocupado'); e.code = 'ocupado'; e.quien = dueño; throw e; }
+      const libre = !dueño || esUrgente(dueño); // en Urgente, cualquiera lo puede tomar
+      if (!libre && soloSiLibre && dueño !== yo.uid) { const e = new Error('ocupado'); e.code = 'ocupado'; e.quien = dueño; throw e; }
+      if (!libre && !soloSiLibre && dueño !== yo.uid && !esOficina()) { const e = new Error('ocupado'); e.code = 'ocupado'; e.quien = dueño; throw e; }
       if (para) tx.set(ref, { chofer: para, ...firma() }); else tx.delete(ref);
     });
     return true;
