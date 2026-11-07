@@ -371,7 +371,7 @@ function buildReparto() {
     <section class="sec${abiertos2.has(gr.g) ? '' : ' closed'}" data-g="${esc(gr.g)}">
       <div class="sec-h"><button class="tog" type="button" aria-expanded="${abiertos2.has(gr.g)}"><span class="tt"><span class="name">Proveedor ${esc(gr.g)} <span class="alm-chof"></span></span><span class="cnt"></span></span><span class="car">▾</span></button></div>
       <div class="items">${gr.items.map(pr => `<article class="prod" id="r-${esc(pr.k)}" data-k="${esc(pr.k)}"></article>`).join('')}</div>
-      <div class="sec-f"><span></span><button class="sig" type="button" data-sig="${esc(gr.g)}">Siguiente →</button></div>
+      <div class="sec-f"><button class="allok" type="button" data-allsep="${esc(gr.g)}">Marcar todo «Separado»</button><button class="sig" type="button" data-sig="${esc(gr.g)}">Siguiente →</button></div>
     </section>`).join('');
   Object.keys(cache2).forEach(k => delete cache2[k]);
   refreshReparto();
@@ -417,7 +417,7 @@ function refreshReparto() {
       if (el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') el.dataset.dirty = '1';
       else { el.innerHTML = html; cache2[pr.k] = html; el.dataset.dirty = ''; }
     }
-    el.classList.toggle('done', prodListo(pr, filas)); el.classList.toggle('alerta', porDecidir(pr));
+    el.classList.toggle('done', prodListo(pr, filas)); el.classList.toggle('alerta', porDecidir(pr)); el.classList.toggle('nohay', est(pr) === 'no');
     const okQ = !q || pr.c.toLowerCase().includes(q) || pr.d.toLowerCase().includes(q) || filas.some(a => ((cliBy[a.p] || {}).nombre || '').toLowerCase().includes(q));
     const okF = f === 'todos' || (f === 'pend' && !prodListo(pr, filas)) || (f === 'falt' && corto(pr)) || (f === 'ek' && isEK(pr));
     el.hidden = !(okQ && okF);
@@ -428,6 +428,7 @@ function refreshReparto() {
     sec.querySelector('.cnt').textContent = comp ? `✓ Completo · ${its.length} productos separados` : `${done} de ${its.length} productos separados`;
     sec.querySelector('.alm-chof').innerHTML = chipChof(chofAlm(g));
     sec.classList.toggle('completo', comp);
+    sec.querySelector('[data-allsep]').hidden = comp;
     sec.hidden = !its.some(i => !document.getElementById('r-' + i.k).hidden);
   });
   const soloMios = ambito[2] === 'mios' && esChofer();
@@ -451,12 +452,41 @@ function saveRep(pr, p, patch) {
   const body = { codigo: pr.c, ...firma(), cli: { [p]: merged } };
   pendRep[pr.k] = (pendRep[pr.k] || Promise.resolve()).then(() => setDoc(ref, body, { merge: true })).catch(errGuardar);
 }
+// «Marcar todo Separado»: solo las líneas sin novedad que la persona está viendo (un chófer en
+// «Mis clientes» solo marca las de sus clientes). Quedan sin separar los productos con «No hay»,
+// «Faltan algunas» o nota, y los EK sin todos los pesos.
+const sinNovedad = pr => (!est(pr) || est(pr) === 'si') && !(R(pr).nota && R(pr).nota.trim()) && !porDecidir(pr);
+const lineasSinNovedad = pr => !sinNovedad(pr) ? [] : filasVisibles(pr).filter(a => !separado(pr, a.p) && lleva(pr, a) > 0
+  && (!isEK(pr) || piezasPesadas(pr, a) >= Math.round(lleva(pr, a))));
+function marcarTodoSeparado(g) {
+  if (!fecha || !dia) return;
+  const its = dia.productos.filter(i => i.g === g && filasVisibles(i).length);
+  const lote = its.map(pr => ({ pr, as: lineasSinNovedad(pr) })).filter(x => x.as.length);
+  const n = lote.reduce((s, x) => s + x.as.length, 0);
+  if (!n) { toast('No hay líneas sin novedad por separar'); return; }
+  const quedan = its.filter(pr => !prodListo(pr, filasVisibles(pr)) && !lote.some(x => x.pr === pr)).length;
+  if (!confirm(`Proveedor ${g}: se marcarán ${n} línea${n === 1 ? '' : 's'} como separada${n === 1 ? '' : 's'}.` + (quedan ? `\n${quedan} producto${quedan === 1 ? '' : 's'} con novedad quedan sin separar para revisarlos.` : ''))) return;
+  const antes = grupoListo(2, g), f = firma();
+  lote.forEach(({ pr, as }) => {
+    const cur = rep[pr.k] || { cli: {} }, cli = { ...(cur.cli || {}) }, cambios = {};
+    as.forEach(a => { cli[a.p] = { ...(cli[a.p] || {}), ok: true }; cambios[a.p] = cli[a.p]; });
+    rep[pr.k] = { ...cur, cli };
+    const ref = doc(db, 'dias', fecha, 'reparto', pr.k);
+    const body = { codigo: pr.c, ...f, cli: cambios };
+    pendRep[pr.k] = (pendRep[pr.k] || Promise.resolve()).then(() => setDoc(ref, body, { merge: true })).catch(errGuardar);
+  });
+  refreshAll();
+  toast(`${n} línea${n === 1 ? '' : 's'} marcada${n === 1 ? '' : 's'} como separada${n === 1 ? '' : 's'}`);
+  if (!antes && grupoListo(2, g)) programarSiguiente(2, g);
+}
 function ctxRep(e) { const el = e.target.closest('.prod'); const row = e.target.closest('.cli'); if (!el || !row) return null; const pr = prodByK(el.dataset.k); const a = pr && pr.a.find(x => x.p === row.dataset.p); return pr && a ? { pr, a, row } : null; }
 $('#lista2').addEventListener('click', e => {
   const tog = e.target.closest('.tog');
   if (tog) { const sec = tog.closest('.sec'); setOpen(2, sec.dataset.g, sec.classList.contains('closed')); return; }
   const sg = e.target.closest('[data-sig]');
   if (sg) { siguiente(2, sg.dataset.sig, false); return; }
+  const as = e.target.closest('[data-allsep]');
+  if (as) { marcarTodoSeparado(as.dataset.allsep); return; }
   const c = ctxRep(e); if (!c) return;
   if (e.target.closest('.sepb')) {
     const ok = !separado(c.pr, c.a.p);
