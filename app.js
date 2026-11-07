@@ -740,13 +740,16 @@ function datosResumen() {
   const nombres = [...new Set([...Object.values(rec), ...Object.values(rep)].map(m => m.nombre).filter(Boolean))];
   // avance por chófer
   const T = traspasos().lista;
+  // Lo que lleva un chófer en total de cada artículo, sumando todos sus clientes.
+  const artsDe = peds => P.map(pr => ({ pr, q: pr.a.reduce((s, a) => s + (peds.has(a.p) ? lleva(pr, a) : 0), 0) })).filter(x => x.q > 0);
   const porChof = choferes().map(ch => {
     const cls = clientesDia().filter(c => chofCli(c.n) === ch.uid);
     const peds = new Set(cls.flatMap(c => c.pedidos));
+    const arts = artsDe(peds);
     const filas = P.flatMap(pr => pr.a.filter(a => peds.has(a.p)).map(a => [pr, a]));
     const alms = grupos().map(x => x.g).filter(g => chofAlm(g) === ch.uid);
     const prodsAlm = P.filter(pr => alms.includes(pr.g));
-    return { ch, clientes: cls.length, lineas: filas.length, sep: filas.filter(([pr, a]) => lineaLista(pr, a)).length, alms, rec: prodsAlm.filter(est).length, prods: prodsAlm.length, dar: T.filter(t => t.de === ch.uid && !trasOk(t.id)).length, recibir: T.filter(t => t.para === ch.uid && !trasOk(t.id)).length };
+    return { ch, clientes: cls.length, arts, lineas: filas.length, sep: filas.filter(([pr, a]) => lineaLista(pr, a)).length, alms, rec: prodsAlm.filter(est).length, prods: prodsAlm.length, dar: T.filter(t => t.de === ch.uid && !trasOk(t.id)).length, recibir: T.filter(t => t.para === ch.uid && !trasOk(t.id)).length };
   });
   const sinCli = clientesDia().filter(c => !chofCli(c.n)).length, sinAlm = grupos().map(x => x.g).filter(g => !chofAlm(g));
   return { faltProv, porCli, ek, nombres, porChof, sinCli, sinAlm };
@@ -762,6 +765,12 @@ function renderResumen() {
   $('#res-chof').innerHTML = '<span class="lbl">Avance por chófer</span>' +
     (D.sinCli || D.sinAlm.length ? `<div class="warnbox" style="margin-bottom:8px">${D.sinCli ? `<b>${D.sinCli}</b> clientes sin chófer. ` : ''}${D.sinAlm.length ? `Almacenes sin chófer: <b>${D.sinAlm.map(esc).join(', ')}</b>.` : ''}</div>` : '') +
     '<ul>' + D.porChof.map(x => `<li><span class="t">${chipChof(x.ch.uid)}</span><span class="m">Almacenes: ${x.alms.length ? x.alms.map(esc).join(', ') + ` · recogidos ${x.rec}/${x.prods}` : '—'}</span><span class="m">Clientes: ${x.clientes} · separados ${x.sep}/${x.lineas}</span><span class="m">Traspasos pendientes: entregar ${x.dar} · recibir ${x.recibir}</span></li>`).join('') + '</ul>';
+  // artículos que lleva cada chófer
+  const conArts = D.porChof.filter(x => x.arts.length);
+  $('#res-arts').innerHTML = '<span class="lbl">Artículos por chófer</span>' + (conArts.length
+    ? conArts.map(x => `<h3>${esc(x.ch.nombre)} · ${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'}</h3><ul>`
+      + x.arts.map(({ pr, q }) => `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.g)} · ${esc(pr.c)} · <b>${fmtQ(q)}</b> ${isEK(pr) ? 'pzs' : 'uds'}</span></li>`).join('') + '</ul>').join('')
+    : '<p class="hint" style="margin:0">Todavía no hay clientes asignados a chóferes.</p>');
   // proveedor
   if (!D.faltProv.length) $('#res-prov').innerHTML = '<span class="lbl">Faltantes en proveedor</span><p class="hint" style="margin:0">Sin faltantes.</p>';
   else { let h = '<span class="lbl">Faltantes en proveedor</span>', g = null; D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { if (g) h += '</ul>'; g = pr.g; h += `<h3>${esc(g)}</h3><ul>`; } const st = m.estado === 'no' ? '<span class="no">No hay</span>' : m.estado === 'parcial' ? `<span class="par">Hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}</span>` : 'Con nota'; h += `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.c)} · pedido ${fmtQ(pr.q)} · ${st}</span>${m.nota ? `<span class="m">Nota: ${esc(m.nota)}</span>` : ''}</li>`; }); $('#res-prov').innerHTML = h + '</ul>'; }
@@ -792,6 +801,15 @@ function buildMsg(D) {
   let sinPesar = 0, cliSin = 0;
   pe.forEach(p => { const n = D.ek[p].reduce((s, x) => s + Math.max(0, Math.round(x.lv) - x.pes), 0); sinPesar += n; if (n) cliSin++; });
   if (sinPesar) o += `\nEK sin pesar: ${sinPesar} piezas en ${cliSin} cliente${cliSin === 1 ? '' : 's'}.`;
+  // qué artículos lleva cada chófer, al final para no tapar lo importante
+  const conArts = D.porChof.filter(x => x.arts.length);
+  if (conArts.length) {
+    o += '\n\nARTÍCULOS POR CHÓFER';
+    conArts.forEach(x => {
+      o += `\n• ${x.ch.nombre} (${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'})`;
+      x.arts.forEach(({ pr, q }) => { o += `\n   ${pr.g} ${pr.c} ${pr.d}: ${fmtQ(q)} ${isEK(pr) ? 'pzs' : 'uds'}`; });
+    });
+  }
   return o.trim();
 }
 $('#copiar').addEventListener('click', () => {
