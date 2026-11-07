@@ -23,6 +23,9 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = fals
 let dias = [], fecha = null, dia = null;
 let rec = {}, rep = {}, asig = {}, almDia = {}, tras = {};
 let usuarios = {}, habitual = {}, yo = null;
+// Clientes marcados como prioritarios. Se guarda por número de cliente y NO se borra al cambiar de día:
+// lo que se marca hoy sirve para priorizarlo mañana.
+let prioridad = {};
 let subsDia = [];
 let cliBy = {}, nDe = {}; // pedido → cliente;  pedido → número de cliente
 const filtro = { 1: 'todos', 2: 'todos', 3: 'sin' }, busq = { 1: '', 2: '', 3: '' };
@@ -124,6 +127,16 @@ function syncSeg() {
 
 /* ================= almacenes (proveedores) y clientes por chófer ================= */
 onSnapshot(doc(db, 'config', 'almacenes'), s => { habitual = (s.exists() && s.data().habitual) || {}; refreshAll(); }, errConexion);
+onSnapshot(doc(db, 'config', 'prioridad'), s => { prioridad = (s.exists() && s.data().cli) || {}; refreshAll(); }, errConexion);
+const esPrio = n => !!prioridad[String(n)];
+const prioPed = p => esPrio(nDe[p]);
+function togglePrio(n) {
+  const v = !esPrio(n);
+  prioridad[String(n)] = v;
+  setDoc(doc(db, 'config', 'prioridad'), { cli: { [String(n)]: v } }, { merge: true }).catch(errGuardar);
+  refreshAll();
+  toast(v ? '⚡ Marcado como prioritario' : 'Ya no es prioritario');
+}
 // Chófer que va a un almacén hoy: lo elegido para el día; si no, el habitual.
 const chofAlm = g => (g in almDia ? almDia[g].chofer : habitual[g]) || null;
 const almHabitualSinCambio = g => !(g in almDia);
@@ -322,10 +335,10 @@ function renderClientes() {
   const q = busq[3].toLowerCase(), f = filtro[3];
   const vis = cls.filter(c => {
     const ch = chofCli(c.n);
-    const okF = f === 'todos' || (f === 'sin' && !ch) || (f === 'mios' && yo && ch === yo.uid) || (f === 'urgente' && esUrgente(ch));
+    const okF = f === 'todos' || (f === 'sin' && !ch) || (f === 'mios' && yo && ch === yo.uid) || (f === 'urgente' && esUrgente(ch)) || (f === 'prio' && esPrio(c.n));
     const okQ = !q || c.nombre.toLowerCase().includes(q) || c.n.includes(q) || c.pedidos.some(p => p.includes(q));
     return okF && okQ;
-  });
+  }).sort((a, b) => (esPrio(b.n) ? 1 : 0) - (esPrio(a.n) ? 1 : 0)); // los prioritarios, arriba
   if (!vis.length) { root.innerHTML = `<div class="empty"><p>${f === 'sin' ? '✓ Todos los clientes tienen chófer.' : f === 'mios' ? 'Todavía no has tomado clientes. Ve a «Sin asignar» y toca «Lo llevo yo».' : f === 'urgente' ? 'No hay nadie en Urgente ahora mismo.' : 'No hay clientes que coincidan.'}</p></div>`; return; }
   const opts = (sel, txt) => `<option value="">${txt}</option>` + choferes().filter(ch => ch.uid !== sel).map(ch => `<option value="${esc(ch.uid)}">${esc(ch.nombre)}</option>`).join('');
   root.innerHTML = vis.map(c => {
@@ -336,10 +349,11 @@ function renderClientes() {
       + (esOficina() ? `<select class="pasar" data-n="${esc(c.n)}" aria-label="Asignar a">${opts(ch, 'Asignar a…')}</select>` : '');
     // Quien lleva el cliente (o la oficina) puede dejarlo en Urgente si no lo puede entregar, para que otro lo tome.
     else if (mio || esOficina()) acc = `<button type="button" class="btn sm urgente" data-urgente="${esc(c.n)}">🚨 Pasar a Urgente</button><button type="button" class="btn ghost sm" data-soltar="${esc(c.n)}">Soltar</button><select class="pasar" data-n="${esc(c.n)}" aria-label="Pasar a">${opts(ch, 'Pasar a…')}</select>`;
-    return `<article class="clie${ch ? ' asignado' : ''}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
-      <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><span class="qty">${lineasDe(c)} productos</span></div>
+    const prio = esPrio(c.n);
+    return `<article class="clie${ch ? ' asignado' : ''}${prio ? ' prio' : ''}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
+      <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><button type="button" class="prio-b${prio ? ' on' : ''}" data-prio="${esc(c.n)}" aria-pressed="${prio}" title="${prio ? 'Quitar prioridad' : 'Marcar como prioritario'}">⚡</button></div>
       <p class="desc">${esc(c.nombre)}</p>
-      <div class="meta">${alms.map(g => `<span class="chip-st" title="Almacén ${esc(g)}">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g)).split(' ')[0]) : ''}</span>`).join('')}</div>
+      <div class="meta">${prio ? '<span class="chip-st prio">⚡ Prioridad</span>' : ''}<span class="chip-st">${lineasDe(c)} productos</span>${alms.map(g => `<span class="chip-st" title="Almacén ${esc(g)}">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g)).split(' ')[0]) : ''}</span>`).join('')}</div>
       <div class="clie-f">${chipChof(ch)}<span class="acc">${acc}</span></div>
     </article>`;
   }).join('');
@@ -361,6 +375,8 @@ async function asignarCliente(n, para, { soloSiLibre = false } = {}) {
 $('#lista3').addEventListener('click', async e => {
   const t = e.target.closest('[data-tomar]');
   if (t) { t.disabled = true; if (await asignarCliente(t.dataset.tomar, yo.uid, { soloSiLibre: true })) toast('✓ Cliente asignado a ti'); t.disabled = false; return; }
+  const pb = e.target.closest('[data-prio]');
+  if (pb) { togglePrio(pb.dataset.prio); return; }
   const u = e.target.closest('[data-urgente]');
   if (u) { u.disabled = true; if (await asignarCliente(u.dataset.urgente, URGENTE_UID)) toast('🚨 Queda en Urgente: otro chófer lo puede tomar'); u.disabled = false; return; }
   const s = e.target.closest('[data-soltar]');
@@ -406,8 +422,8 @@ function prodHTML(pr, filas) {
       const ps = pesosDe(pr, a.p); const n = Math.round(lv);
       row2 += `<div class="pesos">${Array.from({ length: n }, (_, i) => `<input class="peso" data-i="${i}" type="text" inputmode="decimal" placeholder="kg ${i + 1}" value="${ps[i] != null ? String(ps[i]).replace('.', ',') : ''}" aria-label="Peso pieza ${i + 1}">`).join('')}<span class="kg">= ${fmtKg(kgCli(pr, a))}</span></div>`;
     }
-    return `<div class="cli${ok ? ' sep' : ''}" data-p="${esc(a.p)}">
-      <div class="cn">${esc(cl.nombre)}<small>Pedido ${esc(a.p)} · ${fmtQ(a.q)} ${ek ? 'pzs' : 'uds'}${lv !== a.q ? ` · lleva ${fmtQ(lv)}` : ''}</small>${ambito[2] === 'todos' || !esChofer() ? chipChof(ch) : ''}</div>
+    return `<div class="cli${ok ? ' sep' : ''}${prioPed(a.p) ? ' prio' : ''}" data-p="${esc(a.p)}">
+      <div class="cn">${prioPed(a.p) ? '⚡ ' : ''}${esc(cl.nombre)}<small>Pedido ${esc(a.p)} · ${fmtQ(a.q)} ${ek ? 'pzs' : 'uds'}${lv !== a.q ? ` · lleva ${fmtQ(lv)}` : ''}</small>${ambito[2] === 'todos' || !esChofer() ? chipChof(ch) : ''}</div>
       ${lv === 0 && !ok ? '<span class="chip-st bad">No lleva</span>' : `<button type="button" class="sepb" aria-pressed="${ok}">${ok ? '✓ Separado' : 'Separar'}</button>`}
       ${row2 ? `<div class="row2">${row2}</div>` : ''}
     </div>`;
@@ -813,6 +829,8 @@ function msgChofer(uid, D) {
   if (!x) return '';
   let o = `CONTROL · ANTONIO VIÑA · ${fmtF(fecha)}\n${x.ch.nombre}\n`;
   o += `Almacenes: ${x.alms.length ? x.alms.join(', ') : '—'} · Clientes: ${x.clientes}\n`;
+  const prios = clientesDia().filter(c => chofCli(c.n) === uid && esPrio(c.n));
+  if (prios.length) o += `\n⚡ ENTREGAR PRIMERO\n${prios.map(c => `• ${c.n} ${c.nombre}`).join('\n')}\n`;
   o += `\nLO QUE LLEVAS (${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'})`;
   if (x.arts.length) x.arts.forEach(({ pr, q }) => { o += `\n• ${pr.g} ${pr.c} ${pr.d}: ${fmtQ(q)} ${isEK(pr) ? 'pzs' : 'uds'}`; });
   else o += '\nNada asignado todavía.';

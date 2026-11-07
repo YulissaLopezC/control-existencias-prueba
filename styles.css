@@ -223,6 +223,13 @@ nav.tabs a{flex:1 0 auto;padding-inline:10px}
 .chof i{width:10px;height:10px;border-radius:50%;background:var(--c,var(--muted));flex:none}
 .chof.sin{color:var(--muted)} .chof.sin i{background:transparent;border:2px dashed var(--muted);width:8px;height:8px}
 .chof.urgente{color:var(--bad);font-weight:700}
+.chip.prio{border-color:var(--warn);color:var(--warn)}
+.chip.prio[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
+.chip-st.prio{background:var(--warn-bg);color:var(--warn);font-weight:700}
+.prio-b{min-width:40px;min-height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:1.05rem;line-height:1;filter:grayscale(1);opacity:.5}
+.prio-b.on{border-color:var(--warn);background:var(--warn-bg);filter:none;opacity:1}
+.clie.prio{border-color:var(--warn)}
+.cli.prio .cn{color:var(--warn)}
 .chip.urgente{border-color:var(--bad);color:var(--bad)}
 .chip.urgente[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
 .btn.urgente{background:var(--bad);border-color:var(--bad)}
