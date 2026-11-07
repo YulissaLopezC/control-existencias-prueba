@@ -128,14 +128,29 @@ function syncSeg() {
 /* ================= almacenes (proveedores) y clientes por chófer ================= */
 onSnapshot(doc(db, 'config', 'almacenes'), s => { habitual = (s.exists() && s.data().habitual) || {}; refreshAll(); }, errConexion);
 onSnapshot(doc(db, 'config', 'prioridad'), s => { prioridad = (s.exists() && s.data().cli) || {}; refreshAll(); }, errConexion);
-const esPrio = n => !!prioridad[String(n)];
+// Valor guardado por cliente: 'siempre' (hasta que lo quiten) o 'prox:AAAA-MM-DD' (solo el día
+// siguiente al que se marcó; se apaga solo cuando ese día ya pasó).
+const valPrio = n => prioridad[String(n)] || null;
+const primerDiaDespues = d => dias.map(x => x.id).filter(id => id > d).sort()[0] || null;
+// Para el día que se está viendo: 'activa' (va de primero hoy), 'manana' (se marcó hoy, aplica al próximo día) o null.
+function estadoPrio(n) {
+  const v = valPrio(n);
+  if (!v || !fecha) return null;
+  if (v === 'siempre') return 'activa';
+  const d = String(v).slice(5);
+  if (fecha === d) return 'manana';
+  return fecha === primerDiaDespues(d) ? 'activa' : null;
+}
+const esPrio = n => estadoPrio(n) === 'activa';
 const prioPed = p => esPrio(nDe[p]);
-function togglePrio(n) {
-  const v = !esPrio(n);
+let prioMenu = null; // cliente con el menú del ⚡ abierto
+function setPrio(n, modo) {
+  const v = modo === 'siempre' ? 'siempre' : modo === 'prox' ? 'prox:' + (fecha || hoy()) : false;
   prioridad[String(n)] = v;
+  prioMenu = null;
   setDoc(doc(db, 'config', 'prioridad'), { cli: { [String(n)]: v } }, { merge: true }).catch(errGuardar);
   refreshAll();
-  toast(v ? '⚡ Marcado como prioritario' : 'Ya no es prioritario');
+  toast(modo === 'siempre' ? '⚡ Prioritario siempre' : modo === 'prox' ? '⚡ Irá de primero el próximo día' : 'Ya no es prioritario');
 }
 // Chófer que va a un almacén hoy: lo elegido para el día; si no, el habitual.
 const chofAlm = g => (g in almDia ? almDia[g].chofer : habitual[g]) || null;
@@ -335,7 +350,7 @@ function renderClientes() {
   const q = busq[3].toLowerCase(), f = filtro[3];
   const vis = cls.filter(c => {
     const ch = chofCli(c.n);
-    const okF = f === 'todos' || (f === 'sin' && !ch) || (f === 'mios' && yo && ch === yo.uid) || (f === 'urgente' && esUrgente(ch)) || (f === 'prio' && esPrio(c.n));
+    const okF = f === 'todos' || (f === 'sin' && !ch) || (f === 'mios' && yo && ch === yo.uid) || (f === 'urgente' && esUrgente(ch)) || (f === 'prio' && !!estadoPrio(c.n));
     const okQ = !q || c.nombre.toLowerCase().includes(q) || c.n.includes(q) || c.pedidos.some(p => p.includes(q));
     return okF && okQ;
   }).sort((a, b) => (esPrio(b.n) ? 1 : 0) - (esPrio(a.n) ? 1 : 0)); // los prioritarios, arriba
@@ -349,11 +364,19 @@ function renderClientes() {
       + (esOficina() ? `<select class="pasar" data-n="${esc(c.n)}" aria-label="Asignar a">${opts(ch, 'Asignar a…')}</select>` : '');
     // Quien lleva el cliente (o la oficina) puede dejarlo en Urgente si no lo puede entregar, para que otro lo tome.
     else if (mio || esOficina()) acc = `<button type="button" class="btn sm urgente" data-urgente="${esc(c.n)}">🚨 Pasar a Urgente</button><button type="button" class="btn ghost sm" data-soltar="${esc(c.n)}">Soltar</button><select class="pasar" data-n="${esc(c.n)}" aria-label="Pasar a">${opts(ch, 'Pasar a…')}</select>`;
-    const prio = esPrio(c.n);
+    const est3 = estadoPrio(c.n), prio = est3 === 'activa';
+    const chipPrio = est3 === 'activa' ? `<span class="chip-st prio">⚡ ${valPrio(c.n) === 'siempre' ? 'Prioridad siempre' : 'Prioridad hoy'}</span>`
+      : est3 === 'manana' ? '<span class="chip-st prio">⚡ Prioridad el próximo día</span>' : '';
+    const menu = prioMenu === c.n ? `<div class="prio-menu">
+        <button type="button" class="btn sm" data-prio-set="prox" data-n="${esc(c.n)}">⚡ Solo el próximo día</button>
+        <button type="button" class="btn sm" data-prio-set="siempre" data-n="${esc(c.n)}">⚡ Siempre</button>
+        ${est3 ? `<button type="button" class="btn ghost sm" data-prio-set="" data-n="${esc(c.n)}">Quitar prioridad</button>` : ''}
+        <button type="button" class="btn ghost sm" data-prio-cerrar="1">Cancelar</button>
+      </div>` : '';
     return `<article class="clie${ch ? ' asignado' : ''}${prio ? ' prio' : ''}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
-      <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><button type="button" class="prio-b${prio ? ' on' : ''}" data-prio="${esc(c.n)}" aria-pressed="${prio}" title="${prio ? 'Quitar prioridad' : 'Marcar como prioritario'}">⚡</button></div>
+      <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><button type="button" class="prio-b${est3 ? ' on' : ''}" data-prio="${esc(c.n)}" aria-pressed="${!!est3}" title="Prioridad">⚡</button></div>
       <p class="desc">${esc(c.nombre)}</p>
-      <div class="meta">${prio ? '<span class="chip-st prio">⚡ Prioridad</span>' : ''}<span class="chip-st">${lineasDe(c)} productos</span>${alms.map(g => `<span class="chip-st" title="Almacén ${esc(g)}">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g)).split(' ')[0]) : ''}</span>`).join('')}</div>
+      <div class="meta">${chipPrio}<span class="chip-st">${lineasDe(c)} productos</span>${alms.map(g => `<span class="chip-st" title="Almacén ${esc(g)}">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g)).split(' ')[0]) : ''}</span>`).join('')}</div>${menu}
       <div class="clie-f">${chipChof(ch)}<span class="acc">${acc}</span></div>
     </article>`;
   }).join('');
@@ -375,8 +398,11 @@ async function asignarCliente(n, para, { soloSiLibre = false } = {}) {
 $('#lista3').addEventListener('click', async e => {
   const t = e.target.closest('[data-tomar]');
   if (t) { t.disabled = true; if (await asignarCliente(t.dataset.tomar, yo.uid, { soloSiLibre: true })) toast('✓ Cliente asignado a ti'); t.disabled = false; return; }
+  const ps = e.target.closest('[data-prio-set]');
+  if (ps) { setPrio(ps.dataset.n, ps.dataset.prioSet); return; }
+  if (e.target.closest('[data-prio-cerrar]')) { prioMenu = null; renderClientes(); return; }
   const pb = e.target.closest('[data-prio]');
-  if (pb) { togglePrio(pb.dataset.prio); return; }
+  if (pb) { prioMenu = prioMenu === pb.dataset.prio ? null : pb.dataset.prio; renderClientes(); return; }
   const u = e.target.closest('[data-urgente]');
   if (u) { u.disabled = true; if (await asignarCliente(u.dataset.urgente, URGENTE_UID)) toast('🚨 Queda en Urgente: otro chófer lo puede tomar'); u.disabled = false; return; }
   const s = e.target.closest('[data-soltar]');

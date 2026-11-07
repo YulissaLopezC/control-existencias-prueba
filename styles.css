@@ -228,6 +228,7 @@ nav.tabs a{flex:1 0 auto;padding-inline:10px}
 .chip-st.prio{background:var(--warn-bg);color:var(--warn);font-weight:700}
 .prio-b{min-width:40px;min-height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:1.05rem;line-height:1;filter:grayscale(1);opacity:.5}
 .prio-b.on{border-color:var(--warn);background:var(--warn-bg);filter:none;opacity:1}
+.prio-menu{display:grid;gap:6px;margin-top:10px;padding:10px;border:1.5px dashed var(--warn);border-radius:10px;background:var(--warn-bg)}
 .clie.prio{border-color:var(--warn)}
 .cli.prio .cn{color:var(--warn)}
 .chip.urgente{border-color:var(--bad);color:var(--bad)}
