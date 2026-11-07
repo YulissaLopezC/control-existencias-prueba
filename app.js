@@ -525,6 +525,53 @@ function traspasos() {
   return { lista, sinAlm, sinCli };
 }
 const trasOk = id => !!(tras[id] && tras[id].ok);
+
+// ---- PDF imprimible de traspasos por chófer ----
+function datosTrasChofer(uid) {
+  const T = traspasos();
+  return { dar: T.lista.filter(t => t.de === uid), recibir: T.lista.filter(t => t.para === uid) };
+}
+function totalesTras(items) {
+  const ud = items.filter(t => !isEK(t.pr)).reduce((s, t) => s + t.lv, 0);
+  const pz = items.filter(t => isEK(t.pr)).reduce((s, t) => s + t.lv, 0);
+  return [ud ? `${fmtQ(ud)} uds` : null, pz ? `${fmtQ(pz)} pzs` : null].filter(Boolean).join(' · ') || '—';
+}
+function bloqueTrasHTML(de, para, items) {
+  return `<table class="tb">
+    <caption>${esc(nombreDe(de))} → ${esc(nombreDe(para))}</caption>
+    <thead><tr><th>Artículo</th><th>Cant.</th><th>Cliente</th><th>Pedido</th></tr></thead>
+    <tbody>${items.map(t => `<tr><td>${esc(t.pr.d)}</td><td>${fmtQ(t.lv)} ${isEK(t.pr) ? 'pzs' : 'uds'}</td><td>${esc((cliBy[t.a.p] || {}).nombre || '—')}</td><td>${esc(t.a.p)}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="4">Total: ${items.length} línea${items.length === 1 ? '' : 's'} · ${totalesTras(items)}</td></tr></tbody>
+  </table>`;
+}
+function agruparPor(arr, key) { const m = new Map(); arr.forEach(t => { if (!m.has(t[key])) m.set(t[key], []); m.get(t[key]).push(t); }); return [...m.entries()]; }
+function pdfTraspasosHTML(uid) {
+  const { dar, recibir } = datosTrasChofer(uid);
+  let cuerpo = `<h2>Entrega</h2>` + (dar.length ? agruparPor(dar, 'para').map(([para, it]) => bloqueTrasHTML(uid, para, it)).join('') : '<p class="vacio">No tiene nada que entregar a otros chóferes.</p>');
+  cuerpo += `<h2>Recibe</h2>` + (recibir.length ? agruparPor(recibir, 'de').map(([de, it]) => bloqueTrasHTML(de, uid, it)).join('') : '<p class="vacio">No tiene nada que recibir de otros chóferes.</p>');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Control de traspasos · ${esc(nombreDe(uid))}</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111;max-width:700px;margin:0 auto}
+h1{font-size:1.3rem;margin:0 0 2px} .sub{color:#555;margin:0 0 20px}
+h2{font-size:1.05rem;margin:22px 0 8px;border-bottom:2px solid #333;padding-bottom:4px}
+.vacio{color:#777;font-style:italic}
+table.tb{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:.92rem}
+table.tb caption{text-align:left;font-weight:700;padding:6px 8px;background:#eee}
+table.tb th,table.tb td{border:1px solid #ccc;padding:5px 8px;text-align:left}
+table.tb tr.tot td{font-weight:700;background:#f7f7f7;border-top:2px solid #333}
+@media print{body{padding:0;max-width:none}}
+</style></head><body>
+<h1>Control de traspasos · ${esc(nombreDe(uid))}</h1>
+<p class="sub">${fmtF(fecha)} (${diaF(fecha)})</p>
+${cuerpo}
+</body></html>`;
+}
+function imprimirTraspasos(uid) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana. Permite ventanas emergentes para descargar el PDF.'); return; }
+  w.document.open(); w.document.write(pdfTraspasosHTML(uid)); w.document.close();
+  w.addEventListener('load', () => { w.focus(); w.print(); });
+}
 function grupoTrasHTML(titulo, uid, items, puedeMarcar) {
   const hechos = items.filter(t => trasOk(t.id)).length, comp = hechos === items.length;
   return `<section class="sec tras${comp ? ' completo' : ''}">
@@ -542,6 +589,8 @@ function renderTraspasos() {
   if (!dia) { root.innerHTML = emptyHTML(); return; }
   const T = traspasos();
   let h = '';
+  if (esChofer()) h += `<div class="btnrow" style="margin-bottom:4px"><button type="button" class="btn ghost sm" data-pdf="${esc(yo.uid)}">📄 PDF de mis traspasos</button></div>`;
+  else h += `<div class="btnrow" style="margin-bottom:4px">${choferes().map(ch => `<button type="button" class="btn ghost sm" data-pdf="${esc(ch.uid)}">📄 ${esc(ch.nombre)}</button>`).join('')}</div>`;
   if (T.sinAlm || T.sinCli) h += `<div class="warnbox">Faltan asignaciones: ${T.sinAlm ? `<b>${T.sinAlm}</b> productos de almacenes sin chófer` : ''}${T.sinAlm && T.sinCli ? ' y ' : ''}${T.sinCli ? `<b>${T.sinCli}</b> productos de clientes sin chófer` : ''}. Hasta completarlas, los traspasos no estarán completos.</div>`;
   const agrupar = (arr, key) => { const m = new Map(); arr.forEach(t => { if (!m.has(t[key])) m.set(t[key], []); m.get(t[key]).push(t); }); return [...m.entries()]; };
   if (esChofer()) {
@@ -562,6 +611,7 @@ function marcarTras(ids, ok) {
   renderTraspasos(); renderStats();
 }
 $('#lista4').addEventListener('click', e => {
+  const pdf = e.target.closest('[data-pdf]'); if (pdf) { imprimirTraspasos(pdf.dataset.pdf); return; }
   const b = e.target.closest('[data-tras]'); if (b) { marcarTras([b.dataset.tras], !trasOk(b.dataset.tras)); return; }
   const t = e.target.closest('[data-tras-todo]'); if (t) marcarTras(t.dataset.trasTodo.split(','), true);
 });
