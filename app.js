@@ -767,10 +767,14 @@ function renderResumen() {
     '<ul>' + D.porChof.map(x => `<li><span class="t">${chipChof(x.ch.uid)}</span><span class="m">Almacenes: ${x.alms.length ? x.alms.map(esc).join(', ') + ` · recogidos ${x.rec}/${x.prods}` : '—'}</span><span class="m">Clientes: ${x.clientes} · separados ${x.sep}/${x.lineas}</span><span class="m">Traspasos pendientes: entregar ${x.dar} · recibir ${x.recibir}</span></li>`).join('') + '</ul>';
   // artículos que lleva cada chófer
   const conArts = D.porChof.filter(x => x.arts.length);
-  $('#res-arts').innerHTML = '<span class="lbl">Artículos por chófer</span>' + (conArts.length
-    ? conArts.map(x => `<h3>${esc(x.ch.nombre)} · ${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'}</h3><ul>`
-      + x.arts.map(({ pr, q }) => `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.g)} · ${esc(pr.c)} · <b>${fmtQ(q)}</b> ${isEK(pr) ? 'pzs' : 'uds'}</span></li>`).join('') + '</ul>').join('')
-    : '<p class="hint" style="margin:0">Todavía no hay clientes asignados a chóferes.</p>');
+  $('#res-arts').innerHTML = '<span class="lbl">Artículos por chófer</span>'
+    + '<p class="hint" style="margin:0 0 6px">Cada chófer tiene su propio mensaje, con lo que lleva, sus traspasos y las faltas de sus clientes.</p>'
+    + (conArts.length
+      ? conArts.map(x => `<h3>${esc(x.ch.nombre)} · ${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'}</h3><ul>`
+        + x.arts.map(({ pr, q }) => `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.g)} · ${esc(pr.c)} · <b>${fmtQ(q)}</b> ${isEK(pr) ? 'pzs' : 'uds'}</span></li>`).join('')
+        + `</ul><div class="btnrow" style="margin:0 0 14px"><a class="btn wa sm" data-wa-chof="${esc(x.ch.uid)}" href="#" target="_blank" rel="noopener">WhatsApp de ${esc(x.ch.nombre)}</a><button class="btn ghost sm" type="button" data-copiar-chof="${esc(x.ch.uid)}">Copiar su mensaje</button></div>`).join('')
+      : '<p class="hint" style="margin:0">Todavía no hay clientes asignados a chóferes.</p>');
+  conArts.forEach(x => { const a = $(`[data-wa-chof="${x.ch.uid}"]`); if (a) a.href = 'https://wa.me/?text=' + encodeURIComponent(msgChofer(x.ch.uid, D)); });
   // proveedor
   if (!D.faltProv.length) $('#res-prov').innerHTML = '<span class="lbl">Faltantes en proveedor</span><p class="hint" style="margin:0">Sin faltantes.</p>';
   else { let h = '<span class="lbl">Faltantes en proveedor</span>', g = null; D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { if (g) h += '</ul>'; g = pr.g; h += `<h3>${esc(g)}</h3><ul>`; } const st = m.estado === 'no' ? '<span class="no">No hay</span>' : m.estado === 'parcial' ? `<span class="par">Hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}</span>` : 'Con nota'; h += `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.c)} · pedido ${fmtQ(pr.q)} · ${st}</span>${m.nota ? `<span class="m">Nota: ${esc(m.nota)}</span>` : ''}</li>`; }); $('#res-prov').innerHTML = h + '</ul>'; }
@@ -801,17 +805,42 @@ function buildMsg(D) {
   let sinPesar = 0, cliSin = 0;
   pe.forEach(p => { const n = D.ek[p].reduce((s, x) => s + Math.max(0, Math.round(x.lv) - x.pes), 0); sinPesar += n; if (n) cliSin++; });
   if (sinPesar) o += `\nEK sin pesar: ${sinPesar} piezas en ${cliSin} cliente${cliSin === 1 ? '' : 's'}.`;
-  // qué artículos lleva cada chófer, al final para no tapar lo importante
-  const conArts = D.porChof.filter(x => x.arts.length);
-  if (conArts.length) {
-    o += '\n\nARTÍCULOS POR CHÓFER';
-    conArts.forEach(x => {
-      o += `\n• ${x.ch.nombre} (${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'})`;
-      x.arts.forEach(({ pr, q }) => { o += `\n   ${pr.g} ${pr.c} ${pr.d}: ${fmtQ(q)} ${isEK(pr) ? 'pzs' : 'uds'}`; });
-    });
+  return o.trim();
+}
+// Mensaje para mandarle a UN chófer lo suyo: sus artículos, sus traspasos y las faltas de sus clientes.
+function msgChofer(uid, D) {
+  const x = D.porChof.find(y => y.ch.uid === uid);
+  if (!x) return '';
+  let o = `CONTROL · ANTONIO VIÑA · ${fmtF(fecha)}\n${x.ch.nombre}\n`;
+  o += `Almacenes: ${x.alms.length ? x.alms.join(', ') : '—'} · Clientes: ${x.clientes}\n`;
+  o += `\nLO QUE LLEVAS (${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'})`;
+  if (x.arts.length) x.arts.forEach(({ pr, q }) => { o += `\n• ${pr.g} ${pr.c} ${pr.d}: ${fmtQ(q)} ${isEK(pr) ? 'pzs' : 'uds'}`; });
+  else o += '\nNada asignado todavía.';
+  const T = traspasos().lista;
+  const linea = t => `   ${t.pr.d} — ${fmtQ(t.lv)} ${isEK(t.pr) ? 'pzs' : 'uds'} — ${(cliBy[t.a.p] || {}).nombre || t.a.p} (pedido ${t.a.p})`;
+  const dar = T.filter(t => t.de === uid), recibir = T.filter(t => t.para === uid);
+  if (dar.length) { o += '\n\nENTREGAR A COMPAÑEROS'; agruparPor(dar, 'para').forEach(([p, it]) => { o += `\n• Para ${nombreDe(p)}`; it.forEach(t => { o += '\n' + linea(t); }); }); }
+  if (recibir.length) { o += '\n\nRECIBIR DE COMPAÑEROS'; agruparPor(recibir, 'de').forEach(([d, it]) => { o += `\n• De ${nombreDe(d)}`; it.forEach(t => { o += '\n' + linea(t); }); }); }
+  const faltas = ordenCli(D.porCli).filter(p => chofPed(p) === uid);
+  if (faltas.length) {
+    o += '\n\nTUS CLIENTES CON FALTAS';
+    faltas.forEach(p => { o += `\n• ${p} ${cliBy[p].nombre}`; D.porCli[p].forEach(y => { o += `\n   ${y.pr.d}: ` + (y.dec ? 'POR DECIDIR' : `lleva ${fmtQ(y.lv)} de ${fmtQ(y.a.q)}`); }); });
   }
   return o.trim();
 }
+async function copiarTexto(t) {
+  try { await navigator.clipboard.writeText(t); toast('Texto copiado'); return; } catch (e) { }
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.top = '-1000px';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { }
+  ta.remove();
+  toast(ok ? 'Texto copiado' : 'No se pudo copiar: usa el botón de WhatsApp');
+}
+$('#res-arts').addEventListener('click', e => {
+  const b = e.target.closest('[data-copiar-chof]'); if (!b || !dia) return;
+  copiarTexto(msgChofer(b.dataset.copiarChof, datosResumen()));
+});
 $('#copiar').addEventListener('click', () => {
   const t = $('#msg').textContent;
   const sel = () => { const r = document.createRange(); r.selectNodeContents($('#msg')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Texto seleccionado: cópialo'); };
