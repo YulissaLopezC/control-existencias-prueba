@@ -8,8 +8,8 @@ App web para celular (GitHub Pages + Firebase) que cruza los dos PDF diarios del
 Enlace oficial: https://yulissalopezc.github.io/control-existencias-prueba/
 (Versión de prueba con datos aparte: el mismo enlace terminado en `?prueba`.)
 
-La carga automática por correo y la tarea «Crear usuarios» se ejecutan desde el repo `control-existencias`
-(allí están los secretos); publican en la misma base de Firebase que lee este enlace.
+Todo vive en este repo: la app, la carga automática por correo y la tarea «Crear usuarios».
+El repo antiguo `control-existencias` ya no se usa (su enlace solo redirige aquí).
 
 ## Flujo del día
 
