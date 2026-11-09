@@ -15,7 +15,7 @@
  *   vigilar()            → lo que se ejecuta cada minuto.
  */
 
-const REPO = 'YulissaLopezC/control-existencias';
+const REPO = 'YulissaLopezC/control-existencias-prueba';
 const WORKFLOW = 'carga-correo.yml';
 const BUSQUEDA = 'has:attachment filename:pdf newer_than:2d -label:ce-procesado';
 
