@@ -1,11 +1,12 @@
 // Capa de datos. Tres modos:
 //  - REAL: la app publicada. Usa Firebase y los datos reales.
 //  - LOCAL (localhost o ?demo): base de prueba que vive solo en este navegador.
-//  - PRUEBA (enlace control-existencias-prueba o ?prueba): Firebase real, pero TODO se guarda
+//  - PRUEBA (añadiendo ?prueba al enlace): Firebase real, pero TODO se guarda
 //    en colecciones aparte que empiezan por "prueba_". Nunca lee ni escribe los datos reales.
+// Desde el 9 nov 2026 el enlace control-existencias-prueba es la app OFICIAL (modo REAL).
 const params = new URLSearchParams(location.search);
 const LOCAL = ['localhost', '127.0.0.1', ''].includes(location.hostname) || params.has('demo');
-const PRUEBA = !LOCAL && (location.pathname.startsWith('/control-existencias-prueba') || params.has('prueba'));
+const PRUEBA = !LOCAL && params.has('prueba');
 export const MODO = LOCAL ? 'local' : PRUEBA ? 'prueba' : 'real';
 export const DEMO = MODO !== 'real';
 const PRE = 'prueba_';

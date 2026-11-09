@@ -1,7 +1,7 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=21';
+} from './fb.js?v=22';
 import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar } from './parser.js?v=11';
 
 /* ================= utilidades ================= */
