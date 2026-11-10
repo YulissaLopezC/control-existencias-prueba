@@ -841,18 +841,17 @@ function datosResumen() {
 }
 const ordenCli = obj => dia.clientes.map(c => c.p).filter(p => obj[p]);
 function renderResumen() {
-  if (!dia) { ['#res-chof', '#res-prov', '#res-cli', '#res-ek'].forEach(s => $(s).innerHTML = ''); $('#sumgrid').innerHTML = ''; $('#msg').textContent = ''; return; }
+  if (!dia) { ['#res-chof', '#res-arts', '#res-prov', '#res-cli', '#res-ek', '#n-chof', '#n-arts', '#n-prov', '#n-cli', '#n-ek'].forEach(s => $(s).innerHTML = ''); $('#sumgrid').innerHTML = ''; $('#msg').textContent = ''; return; }
   const P = dia.productos, D = datosResumen();
   const lineas = P.reduce((s, p) => s + p.a.length, 0), sep = P.reduce((s, p) => s + p.a.filter(a => lineaLista(p, a)).length, 0);
   $('#sumgrid').innerHTML = `<div><b>${P.filter(est).length}/${P.length}</b><span>Recogidos</span></div><div class="g-no"><b>${D.faltProv.length}</b><span>Faltas prov.</span></div><div><b>${sep}/${lineas}</b><span>Separados</span></div><div class="g-par"><b>${Object.keys(D.porCli).length}</b><span>Clientes afect.</span></div>`;
   $('#sumwho').textContent = D.nombres.length ? 'Han marcado: ' + D.nombres.join(', ') : 'Todavía nadie ha marcado.';
   // chóferes
-  $('#res-chof').innerHTML = '<span class="lbl">Avance por chófer</span>' +
-    (D.sinCli || D.sinAlm.length ? `<div class="warnbox" style="margin-bottom:8px">${D.sinCli ? `<b>${D.sinCli}</b> clientes sin chófer. ` : ''}${D.sinAlm.length ? `Almacenes sin chófer: <b>${D.sinAlm.map(esc).join(', ')}</b>.` : ''}</div>` : '') +
+  $('#res-chof').innerHTML = (D.sinCli || D.sinAlm.length ? `<div class="warnbox" style="margin-bottom:8px">${D.sinCli ? `<b>${D.sinCli}</b> clientes sin chófer. ` : ''}${D.sinAlm.length ? `Almacenes sin chófer: <b>${D.sinAlm.map(esc).join(', ')}</b>.` : ''}</div>` : '') +
     '<ul>' + D.porChof.map(x => `<li><span class="t">${chipChof(x.ch.uid)}</span><span class="m">Almacenes: ${x.alms.length ? x.alms.map(esc).join(', ') + ` · recogidos ${x.rec}/${x.prods}` : '—'}</span><span class="m">Clientes: ${x.clientes} · separados ${x.sep}/${x.lineas}</span><span class="m">Traspasos pendientes: entregar ${x.dar} · recibir ${x.recibir}</span></li>`).join('') + '</ul>';
   // artículos que lleva cada chófer
   const conArts = D.porChof.filter(x => x.arts.length);
-  $('#res-arts').innerHTML = '<span class="lbl">Artículos por chófer</span>'
+  $('#res-arts').innerHTML = ''
     + '<p class="hint" style="margin:0 0 6px">Cada chófer tiene su propio mensaje, con lo que lleva, sus traspasos y las faltas de sus clientes.</p>'
     + (conArts.length
       ? conArts.map(x => `<h3>${esc(x.ch.nombre)} · ${x.arts.length} artículo${x.arts.length === 1 ? '' : 's'}</h3><ul>`
@@ -861,16 +860,25 @@ function renderResumen() {
       : '<p class="hint" style="margin:0">Todavía no hay clientes asignados a chóferes.</p>');
   conArts.forEach(x => { const a = $(`[data-wa-chof="${x.ch.uid}"]`); if (a) a.href = 'https://wa.me/?text=' + encodeURIComponent(msgChofer(x.ch.uid, D)); });
   // proveedor
-  if (!D.faltProv.length) $('#res-prov').innerHTML = '<span class="lbl">Faltantes en proveedor</span><p class="hint" style="margin:0">Sin faltantes.</p>';
-  else { let h = '<span class="lbl">Faltantes en proveedor</span>', g = null; D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { if (g) h += '</ul>'; g = pr.g; h += `<h3>${esc(g)}</h3><ul>`; } const st = m.estado === 'no' ? '<span class="no">No hay</span>' : m.estado === 'parcial' ? `<span class="par">Hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}</span>` : 'Con nota'; h += `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.c)} · pedido ${fmtQ(pr.q)} · ${st}</span>${m.nota ? `<span class="m">Nota: ${esc(m.nota)}</span>` : ''}</li>`; }); $('#res-prov').innerHTML = h + '</ul>'; }
+  if (!D.faltProv.length) $('#res-prov').innerHTML = '<p class="hint" style="margin:0">Sin faltantes.</p>';
+  else { let h = '', g = null; D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { if (g) h += '</ul>'; g = pr.g; h += `<h3>${esc(g)}</h3><ul>`; } const st = m.estado === 'no' ? '<span class="no">No hay</span>' : m.estado === 'parcial' ? `<span class="par">Hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}</span>` : 'Con nota'; h += `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.c)} · pedido ${fmtQ(pr.q)} · ${st}</span>${m.nota ? `<span class="m">Nota: ${esc(m.nota)}</span>` : ''}</li>`; }); $('#res-prov').innerHTML = h + '</ul>'; }
   // clientes
   const pc = ordenCli(D.porCli);
-  if (!pc.length) $('#res-cli').innerHTML = '<span class="lbl">Clientes con faltas</span><p class="hint" style="margin:0">Ningún cliente afectado.</p>';
-  else $('#res-cli').innerHTML = '<span class="lbl">Clientes con faltas</span><ul>' + pc.map(p => `<li><span class="t">${esc(cliBy[p].nombre)} · ${esc(p)} ${chipChof(chofPed(p))}</span>${D.porCli[p].map(x => `<span class="m">${esc(x.pr.d)} · ${x.dec ? '<span class="no">por decidir</span>' : `<span class="par">lleva ${fmtQ(x.lv)} de ${fmtQ(x.a.q)}</span>`}</span>`).join('')}</li>`).join('') + '</ul>';
+  if (!pc.length) $('#res-cli').innerHTML = '<p class="hint" style="margin:0">Ningún cliente afectado.</p>';
+  else $('#res-cli').innerHTML = '<ul>' + pc.map(p => `<li><span class="t">${esc(cliBy[p].nombre)} · ${esc(p)} ${chipChof(chofPed(p))}</span>${D.porCli[p].map(x => `<span class="m">${esc(x.pr.d)} · ${x.dec ? '<span class="no">por decidir</span>' : `<span class="par">lleva ${fmtQ(x.lv)} de ${fmtQ(x.a.q)}</span>`}</span>`).join('')}</li>`).join('') + '</ul>';
   // EK
   const pe = ordenCli(D.ek);
-  if (!pe.length) $('#res-ek').innerHTML = '<span class="lbl">Pesos EK por cliente</span><p class="hint" style="margin:0">No hay productos EK.</p>';
-  else $('#res-ek').innerHTML = '<span class="lbl">Pesos EK por cliente</span><ul>' + pe.map(p => { const xs = D.ek[p], tot = xs.reduce((s, x) => s + x.kg, 0); return `<li><span class="t">${esc(cliBy[p].nombre)} · ${esc(p)} — ${fmtKg(tot)}</span>${xs.map(x => `<span class="m">${esc(x.pr.d)} · ${fmtQ(x.lv)} pzs · ${x.pes < Math.round(x.lv) ? `<span class="par">${x.pes}/${Math.round(x.lv)} pesadas</span> · ` : ''}<b>${fmtKg(x.kg)}</b></span>`).join('')}</li>`; }).join('') + '</ul>';
+  if (!pe.length) $('#res-ek').innerHTML = '<p class="hint" style="margin:0">No hay productos EK.</p>';
+  else $('#res-ek').innerHTML = '<ul>' + pe.map(p => { const xs = D.ek[p], tot = xs.reduce((s, x) => s + x.kg, 0); return `<li><span class="t">${esc(cliBy[p].nombre)} · ${esc(p)} — ${fmtKg(tot)}</span>${xs.map(x => `<span class="m">${esc(x.pr.d)} · ${fmtQ(x.lv)} pzs · ${x.pes < Math.round(x.lv) ? `<span class="par">${x.pes}/${Math.round(x.lv)} pesadas</span> · ` : ''}<b>${fmtKg(x.kg)}</b></span>`).join('')}</li>`; }).join('') + '</ul>';
+  // Lo que se ve en cada barra cerrada, sin tener que abrirla.
+  const ponN = (sel, txt, aviso) => { const el = $(sel); el.textContent = txt; el.classList.toggle('aviso', !!aviso); };
+  const sinChof = D.sinCli + D.sinAlm.length;
+  ponN('#n-chof', sinChof ? `⚠ ${D.sinCli ? D.sinCli + ' clientes' : ''}${D.sinCli && D.sinAlm.length ? ' y ' : ''}${D.sinAlm.length ? D.sinAlm.length + ' almacenes' : ''} sin chófer` : `${D.porChof.length} chóferes`, sinChof);
+  ponN('#n-arts', conArts.length ? `${conArts.length} con artículos` : 'Ninguno todavía');
+  ponN('#n-prov', D.faltProv.length ? `⚠ ${D.faltProv.length}` : 'Sin faltantes', D.faltProv.length);
+  ponN('#n-cli', pc.length ? `⚠ ${pc.length}` : 'Ninguno', pc.length);
+  const sinPesar = pe.reduce((s, p) => s + D.ek[p].reduce((t, x) => t + Math.max(0, Math.round(x.lv) - x.pes), 0), 0);
+  ponN('#n-ek', pe.length ? `${pe.length} cliente${pe.length === 1 ? '' : 's'}${sinPesar ? ` · ${sinPesar} sin pesar` : ''}` : 'No hay EK', sinPesar);
   const msg = buildMsg(D); $('#msg').textContent = msg; $('#wa').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
 }
 function buildMsg(D) {
@@ -928,6 +936,11 @@ $('#res-arts').addEventListener('click', e => {
   const b = e.target.closest('[data-copiar-chof]'); if (!b || !dia) return;
   copiarTexto(msgChofer(b.dataset.copiarChof, datosResumen()));
 });
+// Secciones del Resumen: se abren y cierran tocando su barra (varias a la vez). Empiezan cerradas.
+document.querySelectorAll('.plegable > .pleg-h').forEach(h => h.addEventListener('click', () => {
+  const abierta = h.parentElement.classList.toggle('abierta');
+  h.setAttribute('aria-expanded', String(abierta));
+}));
 $('#copiar').addEventListener('click', () => {
   const t = $('#msg').textContent;
   const sel = () => { const r = document.createRange(); r.selectNodeContents($('#msg')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Texto seleccionado: cópialo'); };
