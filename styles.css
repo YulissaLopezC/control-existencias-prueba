@@ -289,3 +289,14 @@ h2.tit{font-family:var(--f-label);font-size:1.1rem;letter-spacing:.04em;text-tra
 .cli-prods li .lleva{display:block;color:var(--warn);font-weight:700}
 .cli-prods li .rm{grid-column:1/-1;font-size:.78rem;font-weight:700;color:var(--muted)}
 .cli-prods li .rm.ok{color:var(--ok)} .cli-prods li .rm.warn{color:var(--warn)} .cli-prods li .rm.bad{color:var(--bad)}
+
+/* ---------- Resumen: secciones plegables (empiezan cerradas, varias abiertas a la vez) ---------- */
+.plegable{padding:0;overflow:hidden}
+.pleg-h{display:flex;align-items:center;gap:10px;width:100%;padding:14px;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.pleg-h .lbl{margin:0}
+.pleg-n{margin-left:auto;font-size:.85rem;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.pleg-n.aviso{color:var(--warn)}
+.pleg-h .car{color:var(--muted);transition:transform .2s;transform:rotate(-90deg)}
+.plegable.abierta .pleg-h .car{transform:none}
+.plegable .pleg-b{display:none;padding:0 14px 14px}
+.plegable.abierta .pleg-b{display:block}

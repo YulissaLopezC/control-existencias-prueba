@@ -6,7 +6,7 @@
 <title>Control de Existencias Viña</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="styles.css?v=41">
+<link rel="stylesheet" href="styles.css?v=43">
 </head>
 <body>
 <div class="demo-banner" id="demo-banner" hidden>
@@ -122,17 +122,34 @@
       <div class="check" id="sumgrid"></div>
       <p class="hint" id="sumwho"></p>
     </div>
-    <div class="card issues" id="res-chof"></div>
-    <div class="card issues" id="res-arts"></div>
-    <div class="card issues" id="res-prov"></div>
-    <div class="card issues" id="res-cli"></div>
-    <div class="card issues" id="res-ek"></div>
-    <div class="card">
-      <span class="lbl">Mensaje para WhatsApp</span>
-      <pre class="msg" id="msg"></pre>
-      <div class="btnrow" style="margin-top:10px">
-        <a class="btn wa" id="wa" href="#" target="_blank" rel="noopener">Abrir en WhatsApp</a>
-        <button class="btn ghost" id="copiar" type="button">Copiar texto</button>
+    <div class="card plegable" data-sec="chof">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Avance por chófer</span><span class="pleg-n" id="n-chof"></span><span class="car">▾</span></button>
+      <div class="pleg-b issues" id="res-chof"></div>
+    </div>
+    <div class="card plegable" data-sec="arts">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Artículos por chófer</span><span class="pleg-n" id="n-arts"></span><span class="car">▾</span></button>
+      <div class="pleg-b issues" id="res-arts"></div>
+    </div>
+    <div class="card plegable" data-sec="prov">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Faltantes en proveedor</span><span class="pleg-n" id="n-prov"></span><span class="car">▾</span></button>
+      <div class="pleg-b issues" id="res-prov"></div>
+    </div>
+    <div class="card plegable" data-sec="cli">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Clientes con faltas</span><span class="pleg-n" id="n-cli"></span><span class="car">▾</span></button>
+      <div class="pleg-b issues" id="res-cli"></div>
+    </div>
+    <div class="card plegable" data-sec="ek">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Pesos EK por cliente</span><span class="pleg-n" id="n-ek"></span><span class="car">▾</span></button>
+      <div class="pleg-b issues" id="res-ek"></div>
+    </div>
+    <div class="card plegable" data-sec="msg">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Mensaje para WhatsApp</span><span class="pleg-n" id="n-msg"></span><span class="car">▾</span></button>
+      <div class="pleg-b">
+        <pre class="msg" id="msg"></pre>
+        <div class="btnrow" style="margin-top:10px">
+          <a class="btn wa" id="wa" href="#" target="_blank" rel="noopener">Abrir en WhatsApp</a>
+          <button class="btn ghost" id="copiar" type="button">Copiar texto</button>
+        </div>
       </div>
     </div>
   </section>
@@ -180,6 +197,6 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="app.js?v=42"></script>
+<script type="module" src="app.js?v=43"></script>
 </body>
 </html>
