@@ -333,6 +333,31 @@ $('#lista1').addEventListener('change', e => {
 });
 
 /* ================= 2 CLIENTES ================= */
+// Cliente con sus productos desplegados (solo uno a la vez; solo consulta).
+let cliAbierto = null;
+const recMini = pr => {
+  const s = est(pr);
+  if (!s) return '<span class="rm">— Sin recoger</span>';
+  if (s === 'si') return '<span class="rm ok">✓ Recogido</span>';
+  if (s === 'no') return '<span class="rm bad">✕ No hay</span>';
+  return '<span class="rm warn">⚠ Faltan</span>';
+};
+function productosClienteHTML(c) {
+  const gs = [];
+  grupos().forEach(gr => {
+    const filas = [];
+    gr.items.forEach(pr => {
+      const as = pr.a.filter(a => c.pedidos.includes(a.p));
+      if (!as.length) return;
+      const pide = as.reduce((s, a) => s + a.q, 0), lle = as.reduce((s, a) => s + lleva(pr, a), 0);
+      const um = isEK(pr) ? 'EK' : (pr.um || 'UNIDAD');
+      const difiere = Math.abs(lle - pide) > 0.0001;
+      filas.push(`<li><span class="code">${esc(pr.c)}</span><span class="d">${esc(pr.d)}</span><span class="q"><b>${fmtQ(pide)}</b> ${esc(um)}${difiere ? `<small class="lleva">lleva ${fmtQ(lle)}</small>` : ''}</span>${recMini(pr)}</li>`);
+    });
+    if (filas.length) gs.push(`<div class="cp-g"><div class="cp-h">${esc(gr.g)}${chofAlm(gr.g) ? ' · ' + esc(nombreDe(chofAlm(gr.g))) : ''}</div><ul>${filas.join('')}</ul></div>`);
+  });
+  return `<div class="cli-prods">${gs.join('') || '<p class="hint">Este cliente no tiene productos.</p>'}</div>`;
+}
 function renderClientes() {
   const root = $('#lista3'), cont = $('#cuenta-chof');
   if (!dia) { root.innerHTML = emptyHTML(); cont.hidden = true; return; }
@@ -373,10 +398,13 @@ function renderClientes() {
         ${est3 ? `<button type="button" class="btn ghost sm" data-prio-set="" data-n="${esc(c.n)}">Quitar prioridad</button>` : ''}
         <button type="button" class="btn ghost sm" data-prio-cerrar="1">Cancelar</button>
       </div>` : '';
-    return `<article class="clie${ch ? ' asignado' : ''}${prio ? ' prio' : ''}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
+    const abierto = cliAbierto === c.n;
+    return `<article class="clie${ch ? ' asignado' : ''}${prio ? ' prio' : ''}${abierto ? ' abierto' : ''}" data-cli="${esc(c.n)}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
       <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><button type="button" class="prio-b${est3 ? ' on' : ''}" data-prio="${esc(c.n)}" aria-pressed="${!!est3}" title="Prioridad">⚡</button></div>
       <p class="desc">${esc(c.nombre)}</p>
       <div class="meta">${chipPrio}<span class="chip-st">${lineasDe(c)} productos</span>${alms.map(g => `<span class="chip-st" title="Almacén ${esc(g)}">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g)).split(' ')[0]) : ''}</span>`).join('')}</div>${menu}
+      <button type="button" class="ver-prods" data-ver-prods="${esc(c.n)}" aria-expanded="${abierto}">${abierto ? '▴ Ocultar productos' : '▾ Ver productos'}</button>
+      ${abierto ? productosClienteHTML(c) : ''}
       <div class="clie-f">${chipChof(ch)}<span class="acc">${acc}</span></div>
     </article>`;
   }).join('');
@@ -406,7 +434,11 @@ $('#lista3').addEventListener('click', async e => {
   const u = e.target.closest('[data-urgente]');
   if (u) { u.disabled = true; if (await asignarCliente(u.dataset.urgente, URGENTE_UID)) toast('🚨 Queda en Urgente: otro chófer lo puede tomar'); u.disabled = false; return; }
   const s = e.target.closest('[data-soltar]');
-  if (s) { if (await asignarCliente(s.dataset.soltar, null)) toast('Cliente liberado'); }
+  if (s) { if (await asignarCliente(s.dataset.soltar, null)) toast('Cliente liberado'); return; }
+  // Tocar la tarjeta (fuera de botones, selector y de la lista ya abierta) despliega sus productos.
+  if (e.target.closest('button:not([data-ver-prods]), select, .prio-menu, .cli-prods')) return;
+  const card = e.target.closest('[data-cli]');
+  if (card) { cliAbierto = cliAbierto === card.dataset.cli ? null : card.dataset.cli; renderClientes(); }
 });
 $('#lista3').addEventListener('change', async e => {
   const s = e.target.closest('.pasar'); if (!s || !s.value) return;
