@@ -276,3 +276,16 @@ h2.tit{font-family:var(--f-label);font-size:1.1rem;letter-spacing:.04em;text-tra
   nav.tabs{display:grid;grid-template-columns:repeat(3,1fr);overflow:visible;gap:0 4px}
   nav.tabs a{padding:7px 2px 8px;font-size:.82rem;letter-spacing:.02em}
 }
+
+/* ---------- Clientes: desplegar productos del cliente (solo consulta) ---------- */
+.clie[data-cli]{cursor:pointer}
+.ver-prods{justify-self:start;border:0;background:none;padding:2px 0;color:var(--accent);font-weight:700;font-size:.88rem;cursor:pointer}
+.cli-prods{display:grid;gap:10px;padding:10px;border-radius:8px;background:var(--surface-2);cursor:default}
+.cp-h{font-family:var(--f-label);font-weight:600;text-transform:uppercase;letter-spacing:.05em;font-size:.8rem;color:var(--muted);margin-bottom:4px}
+.cli-prods ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cli-prods li{display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;align-items:baseline;padding:6px 8px;border-radius:6px;background:var(--surface);border:1px solid var(--line)}
+.cli-prods li .d{font-weight:600;line-height:1.25;overflow-wrap:anywhere}
+.cli-prods li .q{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cli-prods li .lleva{display:block;color:var(--warn);font-weight:700}
+.cli-prods li .rm{grid-column:1/-1;font-size:.78rem;font-weight:700;color:var(--muted)}
+.cli-prods li .rm.ok{color:var(--ok)} .cli-prods li .rm.warn{color:var(--warn)} .cli-prods li .rm.bad{color:var(--bad)}
