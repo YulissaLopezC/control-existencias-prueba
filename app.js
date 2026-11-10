@@ -1,8 +1,9 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=22';
+} from './fb.js?v=23';
 import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar } from './parser.js?v=11';
+import { USUARIOS_DEMO } from './demo/usuarios.js?v=2';
 
 /* ================= utilidades ================= */
 const $ = s => document.querySelector(s);
@@ -83,11 +84,21 @@ onSnapshot(collection(db, 'usuarios'), snap => {
 function renderQuien() {
   const lista = Object.entries(usuarios).filter(([, u]) => !u.sinLogin).sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9));
   $('#quien').innerHTML = lista.length
-    ? lista.map(([uid, u]) => `<button type="button" class="quien-b" data-uid="${esc(uid)}" style="--c:${esc(u.color || '#5b6876')}"><i></i><span>${esc(u.nombre)}</span><small>${u.rol === 'oficina' ? 'Oficina' : 'Chófer'}${DEMO && u.pinDemo ? ' · PIN ' + esc(u.pinDemo) : ''}</small></button>`).join('')
+    ? lista.map(([uid, u]) => `<button type="button" class="quien-b" data-uid="${esc(uid)}" style="--c:${esc(u.color || '#5b6876')}"><i></i><span>${esc(u.nombre)}</span><small>${u.rol === 'oficina' ? 'Oficina' + (DEMO && u.pinDemo ? ' · PIN ' + esc(u.pinDemo) : '') : 'Chófer · sin PIN'}</small></button>`).join('')
     : '<p class="small">Todavía no hay usuarios creados.</p>';
 }
-$('#quien').addEventListener('click', e => {
-  const b = e.target.closest('[data-uid]'); if (!b) return;
+// Chóferes: entran tocando su nombre, sin escribir PIN (la app usa el suyo por dentro).
+// Oficina (Don Antonio, Yulissa): siempre pide PIN.
+const pinDirecto = uid => { const u = USUARIOS_DEMO.find(x => x.uid === uid); return u && u.rol === 'chofer' && !u.sinLogin ? u.pin : null; };
+$('#quien').addEventListener('click', async e => {
+  const b = e.target.closest('[data-uid]'); if (!b || b.disabled) return;
+  const pd = pinDirecto(b.dataset.uid), u = usuarios[b.dataset.uid];
+  if (pd && u && u.rol === 'chofer') {
+    b.disabled = true; const sm = b.querySelector('small'), antes = sm.textContent; sm.textContent = 'Entrando…';
+    try { await signInWithEmailAndPassword(auth, u.email, pd); }
+    catch (x) { console.error(x); toast(x.code === 'auth/too-many-requests' ? 'Demasiados intentos. Espera unos minutos.' : 'No se pudo entrar. Revisa la conexión.'); }
+    b.disabled = false; sm.textContent = antes; return;
+  }
   elegido = b.dataset.uid; $('#pin-nombre').textContent = nombreDe(elegido);
   $('#pin-form').hidden = false; $('#quien').hidden = true; $('#pin-err').hidden = true; $('#pin').value = ''; $('#pin').focus();
 });

@@ -1,4 +1,7 @@
-// Usuarios de ejemplo para las pruebas (PIN = contraseña). No son cuentas reales.
+// Lista de personas de la app (la usan la versión de prueba y la tarea «Crear usuarios»).
+//  - Chóferes: entran sin escribir PIN; el PIN de aquí lo usa la app por dentro (es público a propósito).
+//  - Oficina: el PIN de aquí SOLO vale en la versión de prueba/local. El PIN real de Don Antonio y
+//    Yulissa NO está en el código: está en los secretos de GitHub PIN_ANTONIO y PIN_YULISSA.
 export const USUARIOS_DEMO = [
   { uid: 'u-jlara', nombre: 'Juan Lara', rol: 'chofer', color: '#1f6fb5', pin: '111111' },
   { uid: 'u-jluna', nombre: 'Juan Luna', rol: 'chofer', color: '#b3407d', pin: '222222' },

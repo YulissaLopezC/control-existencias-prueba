@@ -13,7 +13,7 @@ const PRE = 'prueba_';
 
 let m;
 if (LOCAL) {
-  m = await import('./demo/fake-firebase.js?v=2');
+  m = await import('./demo/fake-firebase.js?v=3');
 } else {
   const V = 'https://www.gstatic.com/firebasejs/10.12.2/';
   const [A, F, U, C] = await Promise.all([
@@ -30,7 +30,7 @@ if (LOCAL) {
     onAuthStateChanged: U.onAuthStateChanged, signInWithEmailAndPassword: U.signInWithEmailAndPassword, signOut: U.signOut,
   };
   if (PRUEBA) {
-    const { USUARIOS_DEMO, fichaUsuario, crearSesion } = await import('./demo/usuarios.js?v=1');
+    const { USUARIOS_DEMO, fichaUsuario, crearSesion } = await import('./demo/usuarios.js?v=2');
     // Toda ruta se desvía a su copia "prueba_": dias → prueba_dias, config → prueba_config, etc.
     const desviar = s => { const r = [...s]; if (!String(r[0]).startsWith(PRE)) r[0] = PRE + r[0]; return r; };
     m.doc = (d, ...s) => F.doc(d, ...desviar(s));

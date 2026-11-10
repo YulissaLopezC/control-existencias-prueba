@@ -6,7 +6,7 @@ const clone = o => (o == null ? o : JSON.parse(JSON.stringify(o)));
 const leer = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } };
 let store = leer();
 
-import { USUARIOS_DEMO, fichaUsuario, crearSesion } from './usuarios.js?v=1';
+import { USUARIOS_DEMO, fichaUsuario, crearSesion } from './usuarios.js?v=2';
 export { USUARIOS_DEMO };
 function sembrar() {
   let cambio = false;

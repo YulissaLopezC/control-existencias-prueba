@@ -23,3 +23,5 @@ jobs:
       - run: node crear-usuarios.mjs
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PIN_ANTONIO: ${{ secrets.PIN_ANTONIO }}
+          PIN_YULISSA: ${{ secrets.PIN_YULISSA }}
