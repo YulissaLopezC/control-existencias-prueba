@@ -974,9 +974,10 @@ function eventos() {
 }
 function renderTiempos() {
   const box = $('#tiempos'); if (!box) return;
-  const head = '<span class="lbl">Control de tiempos</span><p class="hint" style="margin:0 0 6px">A qué hora marcó cada quien, en hora de Canarias. Solo lo ve oficina.</p>';
-  if (!dia) { box.innerHTML = head + '<p class="hint" style="margin:0">Cuando se cargue el día aparecerán las marcas.</p>'; return; }
+  const head = '<p class="hint" style="margin:0 0 6px">A qué hora marcó cada quien, en hora de Canarias. Solo lo ve oficina.</p>';
+  if (!dia) { $('#n-tiempos').textContent = ''; box.innerHTML = head + '<p class="hint" style="margin:0">Cuando se cargue el día aparecerán las marcas.</p>'; return; }
   const ev = eventos();
+  $('#n-tiempos').textContent = ev.length ? `${ev.length} marca${ev.length === 1 ? '' : 's'}` : 'Sin marcas';
   if (!ev.length) { box.innerHTML = head + '<p class="hint" style="margin:0">Todavía nadie ha marcado nada hoy.</p>'; return; }
   const porQuien = agruparPor(ev, 'quien');
   box.innerHTML = head + porQuien.map(([uid, list]) => {
@@ -996,7 +997,9 @@ $('#tiempos').addEventListener('click', e => {
 function renderOficina() {
   renderTiempos();
   // Almacenes del día
-  const box = $('#almacenes');
+  const box = $('#almacenes'), nA = $('#n-alm');
+  if (!dia) { nA.textContent = ''; nA.classList.remove('aviso'); }
+  else { const sinA = grupos().filter(gr => !chofAlm(gr.g)).length; nA.textContent = sinA ? `⚠ ${sinA} sin chófer` : `${grupos().length} almacenes`; nA.classList.toggle('aviso', !!sinA); }
   if (!dia) box.innerHTML = '<p class="small">Cuando se cargue el día aparecerán sus almacenes.</p>';
   else {
     const opts = sel => `<option value="">— Sin chófer —</option>` + choferes().map(ch => `<option value="${esc(ch.uid)}"${ch.uid === sel ? ' selected' : ''}>${esc(ch.nombre)}</option>`).join('');
@@ -1008,6 +1011,7 @@ function renderOficina() {
     }).join('') + '</div>';
   }
   // Usuarios
+  $('#n-usuarios').textContent = `${Object.values(usuarios).filter(u => !u.sinLogin).length} personas`;
   $('#usuarios').innerHTML = Object.entries(usuarios).sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9)).map(([uid, u]) => `<li>${chipChof(uid, u.nombre)} <span class="small">${u.rol === 'oficina' ? 'Oficina' : 'Chófer'}${DEMO && u.pinDemo ? ' · PIN de prueba ' + esc(u.pinDemo) : ''}</span></li>`).join('');
 }
 $('#almacenes').addEventListener('change', e => {
@@ -1088,7 +1092,10 @@ function suscribirRegistro() {
 }
 const ETQ = { publicado: '✅ Publicado', 'no-cuadra': '❌ No cuadra (no se publicó)', error: '❌ Error en los PDF', falta: '⚠️ Falta un PDF', duplicado: 'ℹ️ Ya estaba cargado' };
 function renderRegistro(rows) {
-  const ul = $('#registro');
+  const ul = $('#registro'), nC = $('#n-correo');
+  // En la barra cerrada: cómo fue la última carga.
+  nC.textContent = rows.length ? `${ETQ[rows[0].estado] || rows[0].estado}${rows[0].fecha ? ' · ' + fmtF(rows[0].fecha).slice(0, 5) : ''}` : '';
+  nC.classList.toggle('aviso', !!rows.length && rows[0].estado !== 'publicado' && rows[0].estado !== 'duplicado');
   if (!rows.length) { ul.innerHTML = `<li class="small">${DEMO ? 'En modo prueba no hay carga por correo: usa la carga manual de abajo.' : 'Todavía no ha llegado ningún correo con PDF.'}</li>`; return; }
   ul.innerHTML = rows.map(r => `<li class="${esc(r.estado)}"><span class="t">${ETQ[r.estado] || esc(r.estado)}${r.fecha ? ' · día ' + fmtF(r.fecha) : ''}</span><span class="m">${esc(r.mensaje || '')}</span><span class="m">${r.ts ? new Date(r.ts).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}${r.de ? ' · de ' + esc(r.de) : ''}</span></li>`).join('');
 }
