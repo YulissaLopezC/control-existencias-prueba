@@ -6,7 +6,7 @@
 <title>Control de Existencias Viña</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="styles.css?v=43">
+<link rel="stylesheet" href="styles.css?v=44">
 </head>
 <body>
 <div class="demo-banner" id="demo-banner" hidden>
@@ -156,36 +156,45 @@
 
   <!-- OFICINA -->
   <section id="v-oficina" class="wrap" hidden>
-    <div class="card" style="display:grid;gap:10px">
-      <span class="lbl" style="margin:0">Almacenes del día</span>
-      <p class="small" style="margin:0">Elige qué chófer va a cada almacén. Lo que marques como <b>habitual</b> se aplica solo los próximos días (puedes cambiarlo cuando quieras).</p>
-      <div id="almacenes"></div>
-    </div>
-    <div class="card issues" id="tiempos"></div>
-    <div class="card" style="display:grid;gap:10px">
-      <span class="lbl" style="margin:0">Carga automática por correo</span>
-      <p class="small" style="margin:0">Envía los 2 PDF a <b>existenciascontrolbd@gmail.com</b>. Se publica solo y se responde por correo con el resultado.</p>
-      <ul class="registro" id="registro"><li class="small">Cargando historial…</li></ul>
-    </div>
-    <div id="admin" style="display:grid;gap:14px">
-      <div class="card" style="display:grid;gap:12px">
-        <span class="lbl" style="margin:0">Carga manual (si falla el correo)</span>
-        <label class="filebox" id="fb-prov">
-          <strong>1. Ventas por productos</strong>
-          <span class="st">Lo que se recoge en cada proveedor</span>
-          <input type="file" accept="application/pdf,.pdf" id="f-prov">
-        </label>
-        <label class="filebox" id="fb-diario">
-          <strong>2. Diario de ventas detallado UM</strong>
-          <span class="st">Lo que lleva cada cliente</span>
-          <input type="file" accept="application/pdf,.pdf" id="f-diario">
-        </label>
+    <div class="card plegable abierta" data-sec="alm">
+      <button type="button" class="pleg-h" aria-expanded="true"><span class="lbl">Almacenes del día</span><span class="pleg-n" id="n-alm"></span><span class="car">▾</span></button>
+      <div class="pleg-b" style="display:grid;gap:10px">
+        <p class="small" style="margin:0">Elige qué chófer va a cada almacén. Lo que marques como <b>habitual</b> se aplica solo los próximos días (puedes cambiarlo cuando quieras).</p>
+        <div id="almacenes"></div>
       </div>
-      <div class="card" id="verif" hidden></div>
     </div>
-    <div class="card" style="display:grid;gap:8px">
-      <span class="lbl" style="margin:0">Usuarios</span>
-      <ul class="usuarios" id="usuarios"></ul>
+    <div class="card plegable" data-sec="tiempos">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Control de tiempos</span><span class="pleg-n" id="n-tiempos"></span><span class="car">▾</span></button>
+      <div class="pleg-b issues" id="tiempos"></div>
+    </div>
+    <div class="card plegable" data-sec="correo">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Carga automática por correo</span><span class="pleg-n" id="n-correo"></span><span class="car">▾</span></button>
+      <div class="pleg-b" style="display:grid;gap:10px">
+        <p class="small" style="margin:0">Envía los 2 PDF a <b>existenciascontrolbd@gmail.com</b>. Se publica solo y se responde por correo con el resultado.</p>
+        <ul class="registro" id="registro"><li class="small">Cargando historial…</li></ul>
+      </div>
+    </div>
+    <div class="card plegable" data-sec="manual">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Carga manual (si falla el correo)</span><span class="pleg-n" id="n-manual"></span><span class="car">▾</span></button>
+      <div class="pleg-b" id="admin" style="display:grid;gap:14px">
+        <div style="display:grid;gap:12px">
+          <label class="filebox" id="fb-prov">
+            <strong>1. Ventas por productos</strong>
+            <span class="st">Lo que se recoge en cada proveedor</span>
+            <input type="file" accept="application/pdf,.pdf" id="f-prov">
+          </label>
+          <label class="filebox" id="fb-diario">
+            <strong>2. Diario de ventas detallado UM</strong>
+            <span class="st">Lo que lleva cada cliente</span>
+            <input type="file" accept="application/pdf,.pdf" id="f-diario">
+          </label>
+        </div>
+        <div class="card" id="verif" hidden></div>
+      </div>
+    </div>
+    <div class="card plegable" data-sec="usuarios">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Usuarios</span><span class="pleg-n" id="n-usuarios"></span><span class="car">▾</span></button>
+      <div class="pleg-b"><ul class="usuarios" id="usuarios"></ul></div>
     </div>
   </section>
 </main>
@@ -197,6 +206,6 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="app.js?v=43"></script>
+<script type="module" src="app.js?v=44"></script>
 </body>
 </html>

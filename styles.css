@@ -298,5 +298,5 @@ h2.tit{font-family:var(--f-label);font-size:1.1rem;letter-spacing:.04em;text-tra
 .pleg-n.aviso{color:var(--warn)}
 .pleg-h .car{color:var(--muted);transition:transform .2s;transform:rotate(-90deg)}
 .plegable.abierta .pleg-h .car{transform:none}
-.plegable .pleg-b{display:none;padding:0 14px 14px}
-.plegable.abierta .pleg-b{display:block}
+.plegable .pleg-b{padding:0 14px 14px}
+.plegable:not(.abierta) > .pleg-b{display:none!important}
