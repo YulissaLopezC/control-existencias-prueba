@@ -6,7 +6,7 @@
 <title>Control de Existencias Viña</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="styles.css?v=44">
+<link rel="stylesheet" href="styles.css?v=45">
 </head>
 <body>
 <div class="demo-banner" id="demo-banner" hidden>
@@ -163,6 +163,10 @@
         <div id="almacenes"></div>
       </div>
     </div>
+    <div class="card plegable" data-sec="pedidos">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Pedidos a proveedores</span><span class="pleg-n" id="n-pedidos"></span><span class="car">▾</span></button>
+      <div class="pleg-b" id="pedidos" style="display:grid;gap:10px"></div>
+    </div>
     <div class="card plegable" data-sec="tiempos">
       <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Control de tiempos</span><span class="pleg-n" id="n-tiempos"></span><span class="car">▾</span></button>
       <div class="pleg-b issues" id="tiempos"></div>
@@ -206,6 +210,6 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="app.js?v=44"></script>
+<script type="module" src="app.js?v=45"></script>
 </body>
 </html>
