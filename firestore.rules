@@ -36,12 +36,22 @@ service cloud.firestore {
 
       // Marcas del día: recogida, reparto, clientes asignados, traspasos y almacenes por chófer.
       // Hay que haber entrado con PIN, y solo dentro de un día que exista.
+      // Pedidos enviados a proveedores (quién y a qué hora): solo oficina.
+      match /envios/{g} {
+        allow read, write: if esOficina();
+      }
+
       match /{paso}/{id} {
         allow read: if true;
         allow write: if conSesion()
           && paso in ['recogida', 'reparto', 'asignaciones', 'traspasos', 'almacenes']
           && exists(/databases/$(database)/documents/dias/$(fecha));
       }
+    }
+
+    // Correos de los proveedores (por almacén) y de reparto: solo oficina los ve y los cambia.
+    match /proveedores/{doc} {
+      allow read, write: if esOficina();
     }
 
     // Historial de cargas automáticas: lo ve oficina en la pestaña «Cargar».
@@ -55,5 +65,6 @@ service cloud.firestore {
     match /prueba_config/{doc=**} { allow read, write: if true; }
     match /prueba_usuarios/{doc=**} { allow read, write: if true; }
     match /prueba_registro/{doc=**} { allow read, write: if true; }
+    match /prueba_proveedores/{doc=**} { allow read, write: if true; }
   }
 }

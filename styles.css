@@ -300,3 +300,13 @@ h2.tit{font-family:var(--f-label);font-size:1.1rem;letter-spacing:.04em;text-tra
 .plegable.abierta .pleg-h .car{transform:none}
 .plegable .pleg-b{padding:0 14px 14px}
 .plegable:not(.abierta) > .pleg-b{display:none!important}
+
+/* ---------- Oficina: pedidos a proveedores ---------- */
+.prov-list{display:grid;gap:8px}
+.prov-row{display:grid;gap:8px;padding:10px;border-radius:8px;background:var(--surface-2)}
+.prov-row small{display:block;color:var(--muted);overflow-wrap:anywhere}
+.prov-row .ok{color:var(--ok);font-weight:700}
+.prov-rep{grid-template-columns:1fr auto;align-items:center}
+.prov-edit{display:grid;gap:8px;padding:10px;border:1px dashed var(--line);border-radius:8px}
+.prov-edit input,.prov-edit textarea{width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit}
+#prov-prev .no{color:var(--bad);font-weight:700} #prov-prev .par{color:var(--warn);font-weight:700}
