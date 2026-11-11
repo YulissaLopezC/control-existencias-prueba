@@ -92,11 +92,12 @@ export async function procesarCorreo({ correo, store, avisar, pdfjs, cfg }) {
       fecha, creada: ahora, por: 'correo', origen: 'correo',
       archivos: { proveedores: b.proveedores.nombre, diario: b.diario.nombre }, hashes,
       productos: X.productos.map(p => ({ g: p.g, c: p.c, q: p.q, d: p.d, k: p.k, um: p.um, a: p.a })),
+      devoluciones: X.devoluciones,
       clientes: X.clientes, problemas: 0,
     });
     b.estado = 'publicado'; b.publicado = ahora; await store.setBandeja(fecha, b);
     for (const h of hashes) await store.updCarga(h, { estado: 'publicado' });
-    const info = { fecha, productos: X.productos.length, pedidos: X.clientes.length, lineas, ek, reemplazo: !!previo, antes: previo ? { productos: previo.productos.length, pedidos: previo.clientes.length } : null };
+    const info = { fecha, devoluciones: X.devoluciones, productos: X.productos.length, pedidos: X.clientes.length, lineas, ek, reemplazo: !!previo, antes: previo ? { productos: previo.productos.length, pedidos: previo.clientes.length } : null };
     res.publicados.push(info);
     await registrar(store, { fecha, estado: 'publicado', ahora, de: correo.de, archivos: [b.proveedores.nombre, b.diario.nombre], mensaje: `${info.productos} productos · ${info.pedidos} pedidos · ${lineas} líneas${info.reemplazo ? ' (reemplazó la lista anterior)' : ''}` });
   }
@@ -146,7 +147,8 @@ export function mensajeResultado(res, cfg) {
   let asunto = null;
   for (const p of res.publicados) {
     asunto = `✅ Lista del ${fmtF(p.fecha)} cargada`;
-    partes.push(`✅ La lista del ${fmtF(p.fecha)} ya está en la app para todos los repartidores.\n• ${p.productos} productos · ${p.pedidos} pedidos · ${p.lineas} líneas · ${p.ek} productos EK\n• Todo cuadra: lo que se recoge en proveedores es igual a lo que se reparte a clientes.` + (p.reemplazo ? `\n• Reemplazó la lista que había (antes ${p.antes.productos} productos y ${p.antes.pedidos} pedidos). Las marcas ya hechas se conservan.` : ''));
+    partes.push(`✅ La lista del ${fmtF(p.fecha)} ya está en la app para todos los repartidores.\n• ${p.productos} productos · ${p.pedidos} pedidos · ${p.lineas} líneas · ${p.ek} productos EK\n• Todo cuadra: lo que se recoge en proveedores es igual a lo que se reparte a clientes.` + (p.reemplazo ? `\n• Reemplazó la lista que había (antes ${p.antes.productos} productos y ${p.antes.pedidos} pedidos). Las marcas ya hechas se conservan.` : '')
+      + (p.devoluciones && p.devoluciones.length ? `\n• ↩ ${p.devoluciones.length} devolución(es) al proveedor, apartada(s) de la lista (pendiente de decidir qué hacer):\n` + p.devoluciones.map(d => `   – ${d.c} ${d.d}: ${String(Math.abs(d.q)).replace('.', ',')} · ${d.g} · ${d.a.map(x => x.nombre + ' (pedido ' + x.p + ')').join(', ')}`).join('\n') : ''));
   }
   for (const n of res.noCuadra) {
     asunto = asunto || `❌ La lista del ${fmtF(n.fecha)} no se publicó: no cuadra`;
