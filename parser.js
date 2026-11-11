@@ -2,7 +2,7 @@
 //  - "Ventas por productos": qué recoger en cada proveedor.
 //  - "Diario de ventas detallado UM": qué lleva cada cliente.
 
-const NUM = '(\\d{1,4}(?:\\.\\d{3})*,\\d{2,3})';
+const NUM = '(-?\\d{1,4}(?:\\.\\d{3})*,\\d{2,3})';
 export const num = s => Number(String(s).replace(/\./g, '').replace(',', '.'));
 export const keyOf = c => (String(c).replace(/[^A-Za-z0-9_\-.~:@+]/g, '_') || 'x');
 
@@ -122,9 +122,16 @@ export function cruzar(prov, diario) {
     problemas.push({ c: '—', d: `El PDF dice ${prov.totalDeclarado} productos y se leyeron ${prov.productos.length}`, proveedor: prov.totalDeclarado, clientes: prov.productos.length });
   const clientes = diario.pedidos.map(pd => ({ p: pd.p, n: pd.n, nombre: pd.nombre }));
   const fechas = [prov.fecha, diario.fecha].filter(Boolean);
+  // Cantidad negativa = devolución (algo que se entrega al proveedor). Cuenta para el cruce,
+  // pero se aparta: no sale en Recogida ni en Reparto, solo como aviso en el Resumen.
+  const cliBy = Object.fromEntries(clientes.map(c => [c.p, c]));
+  const devoluciones = productos.filter(pr => pr.q < 0).map(pr => ({
+    g: pr.g, c: pr.c, q: pr.q, d: pr.d, um: pr.um,
+    a: pr.a.map(x => ({ p: x.p, q: x.q, nombre: (cliBy[x.p] || {}).nombre || '' })),
+  }));
   return {
     fecha: fechas[0] || null,
     fechasDistintas: fechas.length === 2 && fechas[0] !== fechas[1],
-    productos, clientes, problemas,
+    productos: productos.filter(pr => pr.q >= 0), devoluciones, clientes, problemas,
   };
 }

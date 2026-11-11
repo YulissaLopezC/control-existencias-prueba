@@ -2,7 +2,7 @@ import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
 } from './fb.js?v=23';
-import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar } from './parser.js?v=11';
+import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar } from './parser.js?v=12';
 import { USUARIOS_DEMO } from './demo/usuarios.js?v=2';
 
 /* ================= utilidades ================= */
@@ -840,12 +840,20 @@ function datosResumen() {
   return { faltProv, porCli, ek, nombres, porChof, sinCli, sinAlm };
 }
 const ordenCli = obj => dia.clientes.map(c => c.p).filter(p => obj[p]);
+// Devoluciones (cantidad negativa en los PDF): por ahora solo se avisan, no entran en Recogida ni Reparto.
+function htmlDevoluciones(dev) {
+  if (!dev || !dev.length) return '';
+  return `<div class="warnbox" style="margin-top:8px"><b>↩ ${dev.length === 1 ? 'Hay 1 devolución' : 'Hay ' + dev.length + ' devoluciones'} al proveedor</b> (apartada${dev.length === 1 ? '' : 's'} de la lista, pendiente de decidir qué hacer):<ul style="margin:6px 0 0;padding-left:18px">`
+    + dev.map(d => `<li>${esc(d.d)} · <b>${fmtQ(Math.abs(d.q))}</b> · ${esc(d.g)} · ${esc(d.c)}${(d.a || []).length ? ' — ' + d.a.map(x => `${esc(x.nombre || '')} (pedido ${esc(x.p)})`).join(', ') : ''}</li>`).join('')
+    + '</ul></div>';
+}
 function renderResumen() {
-  if (!dia) { ['#res-chof', '#res-arts', '#res-prov', '#res-cli', '#res-ek', '#n-chof', '#n-arts', '#n-prov', '#n-cli', '#n-ek'].forEach(s => $(s).innerHTML = ''); $('#sumgrid').innerHTML = ''; $('#msg').textContent = ''; return; }
+  if (!dia) { $('#res-devol').innerHTML = ''; ['#res-chof', '#res-arts', '#res-prov', '#res-cli', '#res-ek', '#n-chof', '#n-arts', '#n-prov', '#n-cli', '#n-ek'].forEach(s => $(s).innerHTML = ''); $('#sumgrid').innerHTML = ''; $('#msg').textContent = ''; return; }
   const P = dia.productos, D = datosResumen();
   const lineas = P.reduce((s, p) => s + p.a.length, 0), sep = P.reduce((s, p) => s + p.a.filter(a => lineaLista(p, a)).length, 0);
   $('#sumgrid').innerHTML = `<div><b>${P.filter(est).length}/${P.length}</b><span>Recogidos</span></div><div class="g-no"><b>${D.faltProv.length}</b><span>Faltas prov.</span></div><div><b>${sep}/${lineas}</b><span>Separados</span></div><div class="g-par"><b>${Object.keys(D.porCli).length}</b><span>Clientes afect.</span></div>`;
   $('#sumwho').textContent = D.nombres.length ? 'Han marcado: ' + D.nombres.join(', ') : 'Todavía nadie ha marcado.';
+  $('#res-devol').innerHTML = htmlDevoluciones(dia.devoluciones);
   // chóferes
   $('#res-chof').innerHTML = (D.sinCli || D.sinAlm.length ? `<div class="warnbox" style="margin-bottom:8px">${D.sinCli ? `<b>${D.sinCli}</b> clientes sin chófer. ` : ''}${D.sinAlm.length ? `Almacenes sin chófer: <b>${D.sinAlm.map(esc).join(', ')}</b>.` : ''}</div>` : '') +
     '<ul>' + D.porChof.map(x => `<li><span class="t">${chipChof(x.ch.uid)}</span><span class="m">Almacenes: ${x.alms.length ? x.alms.map(esc).join(', ') + ` · recogidos ${x.rec}/${x.prods}` : '—'}</span><span class="m">Clientes: ${x.clientes} · separados ${x.sep}/${x.lineas}</span><span class="m">Traspasos pendientes: entregar ${x.dar} · recibir ${x.recibir}</span></li>`).join('') + '</ul>';
@@ -1239,7 +1247,8 @@ function verificar() {
     <div class="check"><div><b>${X.productos.length}</b><span>Productos</span></div><div><b>${X.clientes.length}</b><span>Pedidos</span></div><div><b>${lineas}</b><span>Líneas</span></div><div><b>${nEK}</b><span>EK</span></div></div>`;
   if (X.problemas.length) h += `<div class="alerta-box" style="margin-top:10px">No cuadran ${X.problemas.length} producto(s):<br>${X.problemas.map(p => `${esc(p.c)} ${esc(p.d)}: proveedor ${fmtQ(p.proveedor)} · clientes ${fmtQ(p.clientes)}`).join('<br>')}</div>`;
   else h += `<div class="okbox" style="margin-top:10px">✓ Cuadra: lo que se recoge en proveedores es igual a lo que se reparte a clientes.</div>`;
-  if (X.fechasDistintas) h += `<div class="warnbox" style="margin-top:10px">Los dos PDF tienen fechas distintas (${fmtF(pdfProv.fecha)} y ${fmtF(pdfDiario.fecha)}). Revisa que sean del mismo día.</div>`;
+  h += htmlDevoluciones(X.devoluciones);
+  if (X.fechasDistintas) h +=`<div class="warnbox" style="margin-top:10px">Los dos PDF tienen fechas distintas (${fmtF(pdfProv.fecha)} y ${fmtF(pdfDiario.fecha)}). Revisa que sean del mismo día.</div>`;
   if (!X.fecha) h += `<div class="warnbox" style="margin-top:10px">No encontré la fecha en los PDF.</div>`;
   if (existe) h += `<div class="warnbox" style="margin-top:10px">Ya hay datos del ${fmtF(X.fecha)}. Si publicas, se reemplaza la lista y se conservan las marcas de los productos que sigan.</div>`;
   h += `<div class="btnrow" style="margin-top:12px"><button class="btn" id="publicar" type="button" ${X.fecha ? '' : 'disabled'}>${existe ? 'Reemplazar' : 'Publicar'} el día ${fmtF(X.fecha)}${X.problemas.length ? ' de todos modos' : ''}</button></div>`;
@@ -1254,6 +1263,7 @@ async function publicar() {
     await setDoc(doc(db, 'dias', X.fecha), {
       fecha: X.fecha, creada: ahora(), por: yo ? yo.nombre : '',
       productos: X.productos.map(p => ({ g: p.g, c: p.c, q: p.q, d: p.d, k: p.k, um: p.um, a: p.a })),
+      devoluciones: X.devoluciones,
       clientes: X.clientes, problemas: X.problemas.length,
     });
     toast('Día ' + fmtF(X.fecha) + ' publicado');
