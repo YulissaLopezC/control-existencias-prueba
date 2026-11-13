@@ -1094,12 +1094,11 @@ function renderPedidos() {
       const g = gr.g, P = pedidoDe(g), e = envios[g];
       if (P.para.length && !e) pend++;
       const largo = P.url.length > 1900;
-      const busca = [g, ...P.para, e ? 'enviado ' + (e.nombre || '') : 'sin enviar', ...gr.items.flatMap(pr => [pr.c, pr.d])].join(' ');
-      return `<div class="prov-row" data-g="${esc(g)}" data-busca="${esc(sinTildes(busca))}"><div><b>${esc(g)}</b><small>${P.n} productos · ${P.para.length ? P.para.map(esc).join(', ') : '<span class="par">⚠ Sin correo</span>'}</small>
+      return `<div class="prov-row" data-g="${esc(g)}" data-busca="${esc(sinTildes(g))}"><div><b>${esc(g)}</b><small>${P.n} productos · ${P.para.length ? P.para.map(esc).join(', ') : '<span class="par">⚠ Sin correo</span>'}</small>
         <small>${e ? `<span class="ok">✓ Enviado ${horaCan(e.ts)} · ${esc(e.nombre || '')}</span>` : P.para.length ? '— Sin enviar' : ''}</small></div>
         <div class="btnrow">${P.para.length ? `<a class="btn sm" href="${esc(P.url)}" data-enviar="${esc(g)}">${e ? 'Volver a enviar' : 'Enviar pedido'}</a>` : ''}<button type="button" class="btn ghost sm" data-copiar-ped="${esc(g)}">Copiar</button>${editProv === g ? '' : `<button type="button" class="add-nota" data-prov-editar="${esc(g)}">${P.para.length ? 'Editar correos' : 'Añadir correos'}</button>`}</div>
         ${largo ? '<p class="hint" style="margin:0">Pedido largo: si tu correo lo corta, usa «Copiar» y pégalo.</p>' : ''}</div>` + (editProv === g ? editor(g, P.para) : '');
-    }).join('') + '</div><p class="small" id="ped-nada" style="margin:0" hidden>Ningún pedido coincide con la búsqueda.</p>';
+    }).join('') + '</div><p class="small" id="ped-nada" style="margin:0" hidden>Ningún proveedor con esas siglas hoy.</p>';
     nP.textContent = pend ? `⚠ ${pend} sin enviar` : (Object.keys(envios).length ? '✓ Enviados' : 'Sin correos');
     nP.classList.toggle('aviso', !!pend);
   }
@@ -1114,13 +1113,14 @@ function renderPedidos() {
   const enfocar = activo === 'prov-lista' ? $('#prov-lista') : activo === 'prov-in' ? $('#pedidos .prov-in') : null;
   if (enfocar) { enfocar.focus(); enfocar.setSelectionRange(enfocar.value.length, enfocar.value.length); }
 }
-// Buscador de «Pedidos a proveedores»: oculta los almacenes que no coinciden (por almacén, correo, producto, código o estado).
+// Buscador de «Pedidos a proveedores»: busca solo por las siglas del proveedor (CA, CEN…), por cómo empiezan.
 function sinTildes(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 function filtrarPedidos() {
-  const q = sinTildes($('#buscar-ped').value).trim().split(/\s+/).filter(Boolean);
+  // Se pueden poner varias siglas a la vez: «CA CEN» o «CA, CEN».
+  const q = sinTildes($('#buscar-ped').value).split(/[\s,;]+/).filter(Boolean);
   const filas = [...document.querySelectorAll('#pedidos .prov-row[data-busca]')];
   let vistas = 0;
-  filas.forEach(f => { const ok = q.every(w => f.dataset.busca.includes(w)); f.hidden = !ok; if (ok) vistas++; });
+  filas.forEach(f => { const ok = !q.length || q.some(w => f.dataset.busca.startsWith(w)); f.hidden = !ok; if (ok) vistas++; });
   const nada = $('#ped-nada'); if (nada) nada.hidden = !(q.length && filas.length && !vistas);
 }
 $('#buscar-ped').addEventListener('input', filtrarPedidos);
