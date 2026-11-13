@@ -6,7 +6,7 @@
 <title>Control de Existencias Viña</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="styles.css?v=46">
+<link rel="stylesheet" href="styles.css?v=47">
 </head>
 <body>
 <div class="demo-banner" id="demo-banner" hidden>
@@ -171,6 +171,28 @@
         <div id="almacenes"></div>
       </div>
     </div>
+    <div class="card plegable" data-sec="extras">
+      <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Extras de última hora</span><span class="pleg-n" id="n-extras"></span><span class="car">▾</span></button>
+      <div class="pleg-b" style="display:grid;gap:10px">
+        <p class="small" style="margin:0">Para lo que piden a última hora y no viene en los PDF. Se suma al día (Recogida, Clientes, Reparto y el pedido al proveedor) marcado como <b>extra</b>. Vale solo para este día.</p>
+        <p class="small" id="ex-sin-dia" style="margin:0">Primero tiene que estar cargado el día.</p>
+        <form id="ex-form" class="ex-form" autocomplete="off" hidden>
+          <label>Almacén<select class="field" id="ex-g"></select></label>
+          <label>Cliente<input class="field" id="ex-cli" list="ex-clis" placeholder="Busca por nombre o número, o escribe uno nuevo"></label>
+          <label id="ex-n-l" hidden>Número de cliente (si lo tiene)<input class="field" id="ex-n" inputmode="numeric"></label>
+          <label>Producto<input class="field" id="ex-prod" list="ex-prods" placeholder="Busca por nombre"></label>
+          <div class="ex-fila">
+            <label>Código<input class="field" id="ex-c" autocapitalize="characters"></label>
+            <label>Cantidad<input class="field" id="ex-q" type="number" inputmode="decimal" min="0" step="any"></label>
+            <label>Unidad<select class="field" id="ex-um"></select></label>
+          </div>
+          <p class="hint" id="ex-info" style="margin:0"></p>
+          <div class="btnrow"><button class="btn" type="submit">Añadir extra</button></div>
+        </form>
+        <datalist id="ex-clis"></datalist><datalist id="ex-prods"></datalist>
+        <div id="ex-lista"></div>
+      </div>
+    </div>
     <div class="card plegable" data-sec="pedidos">
       <button type="button" class="pleg-h" aria-expanded="false"><span class="lbl">Pedidos a proveedores</span><span class="pleg-n" id="n-pedidos"></span><span class="car">▾</span></button>
       <div class="pleg-b" style="display:grid;gap:10px">
@@ -221,6 +243,6 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="app.js?v=49"></script>
+<script type="module" src="app.js?v=50"></script>
 </body>
 </html>

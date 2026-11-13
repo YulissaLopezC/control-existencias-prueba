@@ -1,8 +1,8 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=24';
-import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar } from './parser.js?v=12';
+} from './fb.js?v=25';
+import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar, keyOf } from './parser.js?v=12';
 import { USUARIOS_DEMO } from './demo/usuarios.js?v=2';
 
 /* ================= utilidades ================= */
@@ -23,6 +23,9 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = fals
 /* ================= estado ================= */
 let dias = [], fecha = null, dia = null;
 let rec = {}, rep = {}, asig = {}, almDia = {}, tras = {};
+// Extras de última hora (oficina): productos que no vienen en los PDF, por almacén y cliente.
+// Se guardan aparte (dias/{fecha}/extras) y se suman al día como si vinieran en el PDF.
+let extras = {}, diaBase = null;
 let usuarios = {}, habitual = {}, yo = null;
 // Clientes marcados como prioritarios. Se guarda por número de cliente y NO se borra al cambiar de día:
 // lo que se marca hoy sirve para priorizarlo mañana.
@@ -243,7 +246,7 @@ function buildRecogida() {
 function itemHTML(pr) {
   return `<article class="item" id="it-${esc(pr.k)}" data-k="${esc(pr.k)}">
     <div class="row1"><span class="code">${esc(pr.c)}</span><span class="qty"><b>${fmtQ(pr.q)}</b> ${isEK(pr) ? '<span class="um ek">EK · piezas</span>' : 'uds'}</span></div>
-    <p class="desc">${esc(pr.d)}</p>
+    <p class="desc">${esc(pr.d)}</p>${pr.extra ? `<div class="meta">${chipExtra(pr.q, pr.extra)}</div>` : ''}
     <div class="acts">
       <button type="button" class="b-si" data-a="si" aria-pressed="false">Tengo</button>
       <button type="button" class="b-parcial" data-a="parcial" aria-pressed="false">Faltan algunas</button>
@@ -355,6 +358,9 @@ const recMini = pr => {
   if (s === 'no') return '<span class="rm bad">✕ No hay</span>';
   return '<span class="rm warn">⚠ Faltan</span>';
 };
+// En la tarjeta del cliente: «Cliente extra» si no venía en el PDF, o «Tiene extras».
+const cliExtra = c => c.pedidos.some(p => (cliBy[p] || {}).extra) ? '<span class="chip-st tag-extra">＋ Cliente extra</span>'
+  : dia && dia.productos.some(pr => pr.a.some(a => a.extra && c.pedidos.includes(a.p))) ? '<span class="chip-st tag-extra">＋ Tiene extras</span>' : '';
 function productosClienteHTML(c) {
   const gs = [];
   grupos().forEach(gr => {
@@ -362,10 +368,10 @@ function productosClienteHTML(c) {
     gr.items.forEach(pr => {
       const as = pr.a.filter(a => c.pedidos.includes(a.p));
       if (!as.length) return;
-      const pide = as.reduce((s, a) => s + a.q, 0), lle = as.reduce((s, a) => s + lleva(pr, a), 0);
+      const pide = as.reduce((s, a) => s + a.q, 0), lle = as.reduce((s, a) => s + lleva(pr, a), 0), ex = as.reduce((s, a) => s + (a.extra || 0), 0);
       const um = isEK(pr) ? 'EK' : (pr.um || 'UNIDAD');
       const difiere = Math.abs(lle - pide) > 0.0001;
-      filas.push(`<li><span class="code">${esc(pr.c)}</span><span class="d">${esc(pr.d)}</span><span class="q"><b>${fmtQ(pide)}</b> ${esc(um)}${difiere ? `<small class="lleva">lleva ${fmtQ(lle)}</small>` : ''}</span>${recMini(pr)}</li>`);
+      filas.push(`<li><span class="code">${esc(pr.c)}</span><span class="d">${esc(pr.d)}</span><span class="q"><b>${fmtQ(pide)}</b> ${esc(um)}${difiere ? `<small class="lleva">lleva ${fmtQ(lle)}</small>` : ''}${ex ? `<small class="tag-extra">＋ ${txtExtra(pide, ex)}</small>` : ''}</span>${recMini(pr)}</li>`);
     });
     if (filas.length) gs.push(`<div class="cp-g"><div class="cp-h">${esc(gr.g)}${chofAlm(gr.g) ? ' · ' + esc(nombreDe(chofAlm(gr.g))) : ''}</div><ul>${filas.join('')}</ul></div>`);
   });
@@ -415,7 +421,7 @@ function renderClientes() {
     return `<article class="clie${ch ? ' asignado' : ''}${prio ? ' prio' : ''}${abierto ? ' abierto' : ''}" data-cli="${esc(c.n)}" style="--c:${esc(ch ? colorDe(ch) : 'var(--line)')}">
       <div class="row1"><span class="code">Cliente ${esc(c.n)} · Pedido${c.pedidos.length > 1 ? 's' : ''} ${c.pedidos.map(esc).join(', ')}</span><button type="button" class="prio-b${est3 ? ' on' : ''}" data-prio="${esc(c.n)}" aria-pressed="${!!est3}" title="Prioridad">⚡</button></div>
       <p class="desc">${esc(c.nombre)}</p>
-      <div class="meta">${chipPrio}<span class="chip-st">${lineasDe(c)} productos</span>${alms.map(g => `<span class="chip-st" title="Almacén ${esc(g)}">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g)).split(' ')[0]) : ''}</span>`).join('')}</div>${menu}
+      <div class="meta">${chipPrio}${cliExtra(c)}<span class="chip-st">${lineasDe(c)} productos</span>${alms.map(g => `<span class="chip-st" title="Almacén ${esc(g)}">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g)).split(' ')[0]) : ''}</span>`).join('')}</div>${menu}
       <button type="button" class="ver-prods" data-ver-prods="${esc(c.n)}" aria-expanded="${abierto}">${abierto ? '▴ Ocultar productos' : '▾ Ver productos'}</button>
       ${abierto ? productosClienteHTML(c) : ''}
       <div class="clie-f">${chipChof(ch)}<span class="acc">${acc}</span></div>
@@ -494,14 +500,14 @@ function prodHTML(pr, filas) {
       row2 += `<div class="pesos">${Array.from({ length: n }, (_, i) => `<input class="peso" data-i="${i}" type="text" inputmode="decimal" placeholder="kg ${i + 1}" value="${ps[i] != null ? String(ps[i]).replace('.', ',') : ''}" aria-label="Peso pieza ${i + 1}">`).join('')}<span class="kg">= ${fmtKg(kgCli(pr, a))}</span></div>`;
     }
     return `<div class="cli${ok ? ' sep' : ''}${prioPed(a.p) ? ' prio' : ''}" data-p="${esc(a.p)}">
-      <div class="cn">${prioPed(a.p) ? '⚡ ' : ''}${esc(cl.nombre)}<small>Pedido ${esc(a.p)} · ${fmtQ(a.q)} ${ek ? 'pzs' : 'uds'}${lv !== a.q ? ` · lleva ${fmtQ(lv)}` : ''}</small>${ambito[2] === 'todos' || !esChofer() ? chipChof(ch) : ''}</div>
+      <div class="cn">${prioPed(a.p) ? '⚡ ' : ''}${esc(cl.nombre)}<small>Pedido ${esc(a.p)} · ${fmtQ(a.q)} ${ek ? 'pzs' : 'uds'}${lv !== a.q ? ` · lleva ${fmtQ(lv)}` : ''}</small>${chipExtra(a.q, a.extra)}${ambito[2] === 'todos' || !esChofer() ? chipChof(ch) : ''}</div>
       ${lv === 0 && !ok ? '<span class="chip-st bad">No lleva</span>' : `<button type="button" class="sepb" aria-pressed="${ok}">${ok ? '✓ Separado' : 'Separar'}</button>`}
       ${row2 ? `<div class="row2">${row2}</div>` : ''}
     </div>`;
   }).join('');
   return `<div class="row1"><span class="code">${esc(pr.c)}</span><span class="qty"><b>${fmtQ(pr.q)}</b> ${ek ? '<span class="um ek">EK · piezas</span>' : 'uds'}</span></div>
     <p class="desc">${esc(pr.d)}</p>
-    <div class="meta">${estadoRecChip(pr)}${ek ? `<span class="chip-st">${fmtKg(kgProd(pr))} en total</span>` : ''}<span class="chip-st">${todos ? pr.a.length + ' cliente' + (pr.a.length === 1 ? '' : 's') : filas.length + ' de ' + pr.a.length + ' clientes son tuyos'}</span></div>
+    <div class="meta">${estadoRecChip(pr)}${chipExtra(pr.q, pr.extra)}${ek ? `<span class="chip-st">${fmtKg(kgProd(pr))} en total</span>` : ''}<span class="chip-st">${todos ? pr.a.length + ' cliente' + (pr.a.length === 1 ? '' : 's') : filas.length + ' de ' + pr.a.length + ' clientes son tuyos'}</span></div>
     ${alerta}<div class="clis">${rows}</div>`;
 }
 function refreshReparto() {
@@ -1023,7 +1029,7 @@ $('#tiempos').addEventListener('click', e => {
   renderTiempos();
 });
 function renderOficina() {
-  renderTiempos();
+  renderTiempos(); renderExtras();
   // Almacenes del día
   const box = $('#almacenes'), nA = $('#n-alm');
   if (!dia) { nA.textContent = ''; nA.classList.remove('aviso'); }
@@ -1058,6 +1064,111 @@ $('#almacenes').addEventListener('click', e => {
   toast(`${g}: ${ch ? nombreDe(ch) : 'sin chófer'} queda como habitual`); renderOficina();
 });
 
+/* ================= EXTRAS DE ÚLTIMA HORA (solo oficina) ================= */
+// Clientes y productos que no vienen en los PDF, por almacén. Valen solo para ese día.
+// Se busca el producto por su nombre: la app sugiere los que ya han salido en los PDF de ese almacén.
+const exClave = t => sinTildes(t).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'cliente';
+const ponOpts = (el, html) => { if (el.dataset.h !== html) { const v = el.value; el.innerHTML = html; el.dataset.h = html; if (v && [...el.options].some(o => o.value === v)) el.value = v; } };
+// Productos conocidos de un almacén: los de hoy y los de los últimos días cargados.
+function productosConocidos(g) {
+  const m = new Map();
+  [dia ? dia.productos : [], ...dias.map(d => d.productos || [])].forEach(ps => ps.forEach(pr => { if (pr.g === g && !m.has(pr.c)) m.set(pr.c, { c: pr.c, d: pr.d, um: pr.um || 'UNIDAD' }); }));
+  return [...m.values()].sort((a, b) => a.d.localeCompare(b.d));
+}
+const optProd = pr => `${pr.d} · ${pr.c}`;
+const optCli = c => `${c.nombre} · ${c.n}`;
+function exCliente() {
+  const t = $('#ex-cli').value.trim(); if (!t) return null;
+  const cs = clientesDia(), mismoNombre = cs.filter(x => sinTildes(x.nombre).trim() === sinTildes(t));
+  const c = cs.find(x => optCli(x) === t || x.n === t) || (mismoNombre.length === 1 ? mismoNombre[0] : null);
+  return c ? { existe: true, c } : { existe: false, nombre: t };
+}
+function exInfo() {
+  const g = $('#ex-g').value, info = $('#ex-info'), cl = exCliente(), cod = $('#ex-c').value.trim();
+  $('#ex-n-l').hidden = !cl || cl.existe;
+  const msgs = [];
+  if (cl && !cl.existe) msgs.push('Cliente nuevo: no está en el día. Saldrá en «Clientes» para que un chófer lo tome.');
+  const pr = dia && g && cod ? dia.productos.find(i => i.g === g && i.c === cod) : null;
+  if (pr) {
+    const a = cl && cl.existe ? pr.a.find(x => cl.c.pedidos.includes(x.p)) : null;
+    msgs.push(a ? `Este cliente ya pide ${fmtQ(a.q)} de este producto: se sumará y quedará marcado como extra.` : `Este producto ya está en ${g} hoy: se sumará a su línea.`);
+    if (est(pr)) msgs.push('⚠ Ya está marcado en Recogida: avisa al chófer.');
+  }
+  info.textContent = msgs.join(' ');
+}
+function renderExtras() {
+  const form = $('#ex-form'); if (!form) return;
+  const nE = $('#n-extras'), lista = $('#ex-lista');
+  const items = Object.entries(extras).map(([id, x]) => ({ id, ...x })).sort((a, b) => (a.g + a.nombre).localeCompare(b.g + b.nombre));
+  nE.textContent = items.length ? `${items.length} extra${items.length === 1 ? '' : 's'}` : '';
+  form.hidden = !dia; $('#ex-sin-dia').hidden = !!dia;
+  if (!dia) { lista.innerHTML = ''; return; }
+  const gs = [...new Set([...grupos().map(x => x.g), ...dias.flatMap(d => (d.productos || []).map(p => p.g))])].sort();
+  ponOpts($('#ex-g'), '<option value="">Elige el almacén</option>' + gs.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(''));
+  ponOpts($('#ex-clis'), clientesDia().map(c => `<option value="${esc(optCli(c))}"></option>`).join(''));
+  const g = $('#ex-g').value;
+  ponOpts($('#ex-prods'), g ? productosConocidos(g).map(pr => `<option value="${esc(optProd(pr))}"></option>`).join('') : '');
+  const ums = [...new Set(['UNIDAD', 'EK', ...dia.productos.map(p => p.um || 'UNIDAD')])];
+  ponOpts($('#ex-um'), ums.map(u => `<option value="${esc(u)}">${u === 'EK' ? 'EK (piezas)' : esc(u)}</option>`).join(''));
+  lista.innerHTML = items.length ? '<div class="prov-list">' + items.map(x => `<div class="prov-row ex-row" data-ex="${esc(x.id)}">
+      <div><b>${esc(x.g)} · ${esc(x.d)}</b><small>${esc(x.c)} · para ${esc(x.nombre)}${x.n && x.n !== x.p ? ' (' + esc(x.n) + ')' : ''}${x.cliNuevo ? ' · <span class="par">cliente nuevo</span>' : ''}</small>
+      <small>${esc(x.nombre_por || '')}${x.ts ? ' · ' + horaCan(x.ts) : ''}</small></div>
+      <div class="btnrow"><span class="step sm"><input class="ex-q" type="number" inputmode="decimal" min="0" step="any" value="${esc(x.q)}" aria-label="Cantidad"></span><span class="small">${esc(x.um === 'EK' ? 'EK' : x.um || 'UNIDAD')}</span><button type="button" class="btn ghost sm" data-ex-borrar="${esc(x.id)}">Borrar</button></div></div>`).join('') + '</div>'
+    : '<p class="small" style="margin:0">Hoy no hay extras.</p>';
+  exInfo();
+}
+$('#ex-g').addEventListener('change', () => { $('#ex-prod').value = ''; $('#ex-c').value = ''; renderExtras(); });
+$('#ex-cli').addEventListener('input', exInfo);
+$('#ex-c').addEventListener('input', exInfo);
+$('#ex-prod').addEventListener('input', () => {
+  const g = $('#ex-g').value, t = $('#ex-prod').value.trim();
+  const pr = g && productosConocidos(g).find(x => optProd(x) === t);
+  if (pr) { $('#ex-c').value = pr.c; $('#ex-um').value = pr.um; }
+  exInfo();
+});
+$('#ex-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!esOficina() || !fecha) return;
+  const g = $('#ex-g').value, cl = exCliente(), t = $('#ex-prod').value.trim(), c = $('#ex-c').value.trim().toUpperCase(), q = Number(String($('#ex-q').value).replace(',', '.'));
+  if (!g) { toast('Elige el almacén'); return; }
+  if (!cl) { toast('Escribe el cliente'); return; }
+  if (!t) { toast('Escribe el producto'); return; }
+  if (!c) { toast('Falta el código del producto'); return; }
+  if (!(q > 0)) { toast('Escribe una cantidad mayor que 0'); return; }
+  const conocido = productosConocidos(g).find(x => optProd(x) === t || x.c === c);
+  const d = conocido && conocido.c === c ? conocido.d : t.replace(/ · [^·]*$/, '');
+  let datosCli;
+  if (cl.existe) datosCli = { p: cl.c.pedidos[0], n: cl.c.n, nombre: cl.c.nombre, cliNuevo: false };
+  else {
+    const n = $('#ex-n').value.trim();
+    const yaEsta = n && clientesDia().find(x => x.n === n);
+    datosCli = yaEsta ? { p: yaEsta.pedidos[0], n: yaEsta.n, nombre: yaEsta.nombre, cliNuevo: false }
+      : { p: 'EX-' + (n ? keyOf(n) : exClave(cl.nombre)), n: n || '', nombre: cl.nombre, cliNuevo: true };
+  }
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const f = firma();
+  const ok = await setDoc(doc(db, 'dias', fecha, 'extras', id), { g, c, d, um: $('#ex-um').value || 'UNIDAD', q, ...datosCli, nombre_por: f.nombre, uid: f.uid, ts: f.ts }).then(() => true, x => { errGuardar(x); return false; });
+  if (!ok) return;
+  toast(`Extra añadido: ${fmtQ(q)} ${d} para ${datosCli.nombre}`);
+  if (envios[g]) toast(`El pedido de ${g} ya se envió: vuelve a enviarlo`);
+  // El cliente queda escrito tal como sale en la lista, para seguir añadiéndole productos.
+  $('#ex-cli').value = optCli({ nombre: datosCli.nombre, n: datosCli.n || datosCli.p });
+  $('#ex-prod').value = ''; $('#ex-c').value = ''; $('#ex-q').value = ''; $('#ex-n').value = '';
+  $('#ex-prod').focus();
+});
+$('#ex-lista').addEventListener('change', e => {
+  const i = e.target.closest('.ex-q'); if (!i) return;
+  const id = i.closest('[data-ex]').dataset.ex, q = Number(String(i.value).replace(',', '.'));
+  if (!(q > 0)) { toast('Para quitarlo usa «Borrar»'); renderExtras(); return; }
+  const f = firma();
+  setDoc(doc(db, 'dias', fecha, 'extras', id), { q, nombre_por: f.nombre, uid: f.uid, ts: f.ts }, { merge: true }).then(() => toast('Cantidad cambiada'), errGuardar);
+});
+$('#ex-lista').addEventListener('click', e => {
+  const b = e.target.closest('[data-ex-borrar]'); if (!b) return;
+  const x = extras[b.dataset.exBorrar]; if (!x || !confirm(`¿Borrar el extra de ${x.d} para ${x.nombre}?`)) return;
+  deleteDoc(doc(db, 'dias', fecha, 'extras', b.dataset.exBorrar)).then(() => toast('Extra borrado'), errGuardar);
+});
+
 /* ================= PEDIDOS A PROVEEDORES (oficina) y ENVÍOS (chóferes) ================= */
 // Los correos de cada almacén y el de reparto se guardan UNA vez (proveedores/correos); solo oficina los cambia.
 // Cada día, «Enviar pedido» abre el correo de quien lo manda con todo escrito; reparto siempre va en copia.
@@ -1082,18 +1193,20 @@ function suscribirPedidos() {
 function pedidoDe(g) {
   const gr = grupos().find(x => x.g === g); if (!gr) return null;
   const asunto = `Antonio Viña – Pedido – ${g}`;
-  const lineas = gr.items.map(pr => `• ${pr.c}  ${pr.d} — ${fmtQ(pr.q)} ${isEK(pr) ? 'EK' : (pr.um || 'UNIDAD')}`);
+  const lineas = gr.items.map(pr => `• ${pr.c}  ${pr.d} — ${fmtQ(pr.q)} ${isEK(pr) ? 'EK' : (pr.um || 'UNIDAD')}${pr.extra ? ` (${txtExtra(pr.q, pr.extra)})` : ''}`);
   const cuerpo = `Buenos días,\n\nEste es nuestro pedido para el día ${fmtF(fecha)} (almacén ${g}):\n\n${lineas.join('\n')}\n\nTotal: ${gr.items.length} producto${gr.items.length === 1 ? '' : 's'}.\n\nGracias.\nDistribuciones Antonio Viña`;
   const para = correosProv.alm[g] || [], cc = correosProv.reparto || [];
   const url = `mailto:${para.map(encodeURIComponent).join(',')}?${cc.length ? 'cc=' + cc.map(encodeURIComponent).join(',') + '&' : ''}subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
   return { asunto, cuerpo, para, cc, url, n: gr.items.length };
 }
+const extrasDespues = (g, ts) => Object.values(extras).some(x => x.g === g && String(x.ts || '') > String(ts || ''));
 // Una fila de pedido (la usan oficina y chóferes): estado, revisar el correo completo, enviar y copiar.
 function filaPedido(g, extra = '') {
   const P = pedidoDe(g), e = envios[g], ver = verPed.has(g);
   const largo = P.url.length > 1900;
   return `<div class="prov-row" data-g="${esc(g)}" data-busca="${esc(sinTildes(g))}"><div><b>${esc(g)}</b><small>${P.n} productos · ${P.para.length ? P.para.map(esc).join(', ') : `<span class="par">⚠ Sin correo${esOficina() ? '' : ': avisa a oficina'}</span>`}</small>
-      <small>${e ? `<span class="ok">✓ Enviado ${horaCan(e.ts)} · ${esc(e.nombre || '')}</span>` : P.para.length ? '— Sin enviar' : ''}</small></div>
+      <small>${e ? `<span class="ok">✓ Enviado ${horaCan(e.ts)} · ${esc(e.nombre || '')}</span>` : P.para.length ? '— Sin enviar' : ''}</small>
+      ${e && extrasDespues(g, e.ts) ? '<small><span class="par">⚠ Hay extras nuevos después del envío: vuelve a enviar</span></small>' : ''}</div>
       <div class="btnrow"><button type="button" class="btn ghost sm" data-ver-ped="${esc(g)}" aria-expanded="${ver}">${ver ? 'Ocultar correo' : 'Revisar correo'}</button>${P.para.length ? `<a class="btn sm" href="${esc(P.url)}" data-enviar="${esc(g)}">${e ? 'Volver a enviar' : 'Enviar pedido'}</a>` : ''}<button type="button" class="btn ghost sm" data-copiar-ped="${esc(g)}">Copiar</button>${extra}</div>
       ${ver ? `<pre class="msg ped-ver">${esc(textoPedido(P))}</pre>` : ''}
       ${largo ? '<p class="hint" style="margin:0">Pedido largo: si tu correo lo corta, usa «Copiar» y pégalo.</p>' : ''}</div>`;
@@ -1104,7 +1217,7 @@ function renderEnvios() {
   const box = $('#envios'), tab = $('#t-envios'); if (!box) return;
   if (!esChofer()) { box.innerHTML = ''; tab.textContent = 'Envíos'; return; }
   const mios = misAlmacenes();
-  const pend = mios.filter(g => (correosProv.alm[g] || []).length && !envios[g]).length;
+  const pend = mios.filter(g => (correosProv.alm[g] || []).length && (!envios[g] || extrasDespues(g, envios[g].ts))).length;
   tab.textContent = pend ? `Envíos · ${pend}` : 'Envíos';
   if (errProv) { box.innerHTML = '<p class="small">No se pudieron leer los correos de los proveedores. Avisa a oficina.</p>'; return; }
   if (!dia) { box.innerHTML = '<div class="empty"><p>Cuando se cargue el día aparecerán aquí los pedidos de tus almacenes.</p></div>'; return; }
@@ -1125,7 +1238,7 @@ function renderPedidos() {
     let pend = 0;
     h += '<div class="prov-list">' + grupos().map(gr => {
       const g = gr.g, P = pedidoDe(g), e = envios[g];
-      if (P.para.length && !e) pend++;
+      if (P.para.length && (!e || extrasDespues(g, e.ts))) pend++;
       const extra = editProv === g ? '' : `<button type="button" class="add-nota" data-prov-editar="${esc(g)}">${P.para.length ? 'Editar correos' : 'Añadir correos'}</button>`;
       return filaPedido(g, extra) + (editProv === g ? editor(g, P.para) : '');
     }).join('') + '</div><p class="small" id="ped-nada" style="margin:0" hidden>Ningún proveedor con esas siglas hoy.</p>';
@@ -1237,24 +1350,47 @@ function renderFechas() {
   if (fechaSel) s.value = fechaSel;
 }
 function setDia(d) {
-  dia = d ? { ...d, productos: d.productos.map(p => ({ ...p, q: Number(p.q), a: (p.a || []).map(a => ({ ...a, q: Number(a.q) })) })) } : null;
+  diaBase = d || null;
+  dia = d ? { ...d, productos: d.productos.map(p => ({ ...p, q: Number(p.q), a: (p.a || []).map(a => ({ ...a, q: Number(a.q) })) })), clientes: [...d.clientes] } : null;
+  if (dia) sumarExtras(dia);
   cliBy = {}; nDe = {}; if (dia) dia.clientes.forEach(c => { cliBy[c.p] = c; nDe[c.p] = String(c.n || c.p); });
 }
+// Suma los extras al día: si el producto ya está en ese almacén, se suma a su línea
+// (y si ese cliente ya lo pedía, a su cantidad); si no, se crea la línea. Cada línea
+// guarda cuánto es extra (pr.extra y a.extra) para avisarlo.
+function sumarExtras(D) {
+  const lista = Object.entries(extras).map(([id, x]) => ({ id, ...x, q: Number(x.q) })).filter(x => x.q > 0 && x.g && x.c && x.p)
+    .sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  lista.forEach(x => {
+    if (!D.clientes.some(c => c.p === x.p)) D.clientes.push({ p: x.p, n: x.n || x.p, nombre: x.nombre || 'Cliente ' + (x.n || ''), extra: true });
+    let pr = D.productos.find(i => i.g === x.g && i.c === x.c);
+    if (!pr) { pr = { g: x.g, c: x.c, d: x.d || x.c, um: x.um || 'UNIDAD', q: 0, k: 'x_' + keyOf(x.g) + '_' + keyOf(x.c), a: [], nuevo: true }; D.productos.push(pr); }
+    pr.q += x.q; pr.extra = (pr.extra || 0) + x.q;
+    let a = pr.a.find(y => y.p === x.p);
+    if (!a) { a = { p: x.p, q: 0 }; pr.a.push(a); }
+    a.q += x.q; a.extra = (a.extra || 0) + x.q;
+  });
+}
+// Aviso de lo extra: «3 extra» o, si la línea tenía más, «incluye 3 extra».
+const txtExtra = (total, ex) => !ex ? '' : Math.abs(total - ex) < 0.0001 ? `${fmtQ(ex)} extra` : `incluye ${fmtQ(ex)} extra`;
+const chipExtra = (total, ex) => ex ? `<span class="chip-st tag-extra">＋ ${txtExtra(total, ex)}</span>` : '';
 const coleccion = (nombre, fn) => onSnapshot(collection(db, 'dias', fecha, nombre), snap => { const m = {}; snap.forEach(x => m[x.id] = x.data()); fn(m); refreshAll(); }, errConexion);
 function selectFecha(id) {
   fechaSel = id || hoy();
   const d = dias.find(x => x.id === fechaSel);
   const nueva = d ? fechaSel : null;
   const changed = fecha !== nueva;
+  if (changed) extras = {};
   fecha = nueva; setDia(d);
   renderFechas();
   buildRecogida(); buildReparto();
   if (changed) {
-    rec = {}; rep = {}; asig = {}; almDia = {}; tras = {};
+    rec = {}; rep = {}; asig = {}; almDia = {}; tras = {}; extras = {};
     subsDia.forEach(u => u()); subsDia = [];
     if (fecha) subsDia = [
       coleccion('recogida', m => rec = m), coleccion('reparto', m => rep = m), coleccion('asignaciones', m => asig = m),
       coleccion('almacenes', m => almDia = m), coleccion('traspasos', m => tras = m),
+      coleccion('extras', m => { extras = m; setDia(diaBase); buildRecogida(); buildReparto(); renderPedidos(); }),
     ];
   }
   if (changed) suscribirPedidos();

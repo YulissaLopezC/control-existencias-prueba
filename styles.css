@@ -314,3 +314,14 @@ h2.tit{font-family:var(--f-label);font-size:1.1rem;letter-spacing:.04em;text-tra
 /* ---------- Envíos: revisar el correo antes de enviarlo ---------- */
 .prov-row pre.ped-ver{background:var(--surface);border:1px solid var(--line);max-height:320px}
 #v-envios{display:grid;gap:10px}
+
+/* ---------- Extras de última hora ---------- */
+.tag-extra{background:#fff1d6;color:#8a5a00}
+small.tag-extra{display:block;padding:0;background:none;font-weight:700}
+.ex-form{display:grid;gap:8px}
+.ex-form label{display:grid;gap:4px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.ex-form .field{width:100%;box-sizing:border-box}
+.ex-fila{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.ex-row .btnrow{align-items:center}
+.ex-row .ex-q{width:80px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit}
+
