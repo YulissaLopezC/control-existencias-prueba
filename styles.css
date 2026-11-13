@@ -310,3 +310,7 @@ h2.tit{font-family:var(--f-label);font-size:1.1rem;letter-spacing:.04em;text-tra
 .prov-edit{display:grid;gap:8px;padding:10px;border:1px dashed var(--line);border-radius:8px}
 .prov-edit input,.prov-edit textarea{width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit}
 #prov-prev .no{color:var(--bad);font-weight:700} #prov-prev .par{color:var(--warn);font-weight:700}
+
+/* ---------- Envíos: revisar el correo antes de enviarlo ---------- */
+.prov-row pre.ped-ver{background:var(--surface);border:1px solid var(--line);max-height:320px}
+#v-envios{display:grid;gap:10px}

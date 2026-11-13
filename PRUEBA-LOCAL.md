@@ -54,6 +54,7 @@ Cada **pestaña** del navegador puede tener un usuario distinto, y se ven entre 
 4. Pestaña 3 → **Juan Luna** → intenta tomar un cliente de Juan Lara: no lo deja.
 5. **3 Reparto** muestra solo los clientes de cada uno; **4 Traspasos** muestra qué pasarse en el punto de encuentro.
 6. **Resumen** muestra el avance por chófer, faltantes y pesos EK.
-7. Como oficina, en **Oficina → Pedidos a proveedores** puedes revisar el correo de cada almacén antes de enviarlo.
+7. Como oficina, en **Oficina → Pedidos a proveedores** toca «Revisar correo» para ver el correo de cada almacén antes de enviarlo.
+8. Como chófer, la pestaña **Envíos** muestra solo los pedidos de sus almacenes del día (con «Revisar correo», «Enviar pedido» y «Copiar»). El número de la pestaña son los que le faltan por enviar.
 
 Para empezar de cero: botón **Borrar datos de prueba** en la franja amarilla.
