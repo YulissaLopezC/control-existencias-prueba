@@ -869,11 +869,12 @@ function renderResumen() {
   conArts.forEach(x => { const a = $(`[data-wa-chof="${x.ch.uid}"]`); if (a) a.href = 'https://wa.me/?text=' + encodeURIComponent(msgChofer(x.ch.uid, D)); });
   // proveedor
   if (!D.faltProv.length) $('#res-prov').innerHTML = '<p class="hint" style="margin:0">Sin faltantes.</p>';
-  else { let h = '', g = null; D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { if (g) h += '</ul>'; g = pr.g; h += `<h3>${esc(g)}</h3><ul>`; } const st = m.estado === 'no' ? '<span class="no">No hay</span>' : m.estado === 'parcial' ? `<span class="par">Hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}</span>` : 'Con nota'; h += `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.c)} · pedido ${fmtQ(pr.q)} · ${st}</span>${m.nota ? `<span class="m">Nota: ${esc(m.nota)}</span>` : ''}</li>`; }); $('#res-prov').innerHTML = h + '</ul>'; }
+  else { let h = '', g = null; D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { if (g) h += '</ul>'; g = pr.g; h += `<h3>${esc(g)}</h3><ul>`; } const st = m.estado === 'no' ? '<span class="no">No hay</span>' : m.estado === 'parcial' ? `<span class="par">Hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}</span>` : 'Con nota'; h += `<li><span class="t">${esc(pr.d)}</span><span class="m">${esc(pr.c)} · pedido ${fmtQ(pr.q)} · ${st}</span>${m.nota ? `<span class="m">Nota: ${esc(m.nota)}</span>` : ''}</li>`; }); $('#res-prov').innerHTML = h + '</ul>' + botonesSec('prov'); }
   // clientes
   const pc = ordenCli(D.porCli);
   if (!pc.length) $('#res-cli').innerHTML = '<p class="hint" style="margin:0">Ningún cliente afectado.</p>';
-  else $('#res-cli').innerHTML = '<ul>' + pc.map(p => `<li><span class="t">${esc(cliBy[p].nombre)} · ${esc(p)} ${chipChof(chofPed(p))}</span>${D.porCli[p].map(x => `<span class="m">${esc(x.pr.d)} · ${x.dec ? '<span class="no">por decidir</span>' : `<span class="par">lleva ${fmtQ(x.lv)} de ${fmtQ(x.a.q)}</span>`}</span>`).join('')}</li>`).join('') + '</ul>';
+  else $('#res-cli').innerHTML = '<ul>' + pc.map(p => `<li><span class="t">${esc(cliBy[p].nombre)} · ${esc(p)} ${chipChof(chofPed(p))}</span>${D.porCli[p].map(x => `<span class="m">${esc(x.pr.d)} · ${x.dec ? '<span class="no">por decidir</span>' : `<span class="par">lleva ${fmtQ(x.lv)} de ${fmtQ(x.a.q)}</span>`}</span>`).join('')}</li>`).join('') + '</ul>' + botonesSec('cli');
+  ['prov', 'cli'].forEach(sec => { const a = $(`[data-wa-sec="${sec}"]`); if (a) a.href = 'https://wa.me/?text=' + encodeURIComponent(textoSec(sec, D)); });
   // EK
   const pe = ordenCli(D.ek);
   if (!pe.length) $('#res-ek').innerHTML = '<p class="hint" style="margin:0">No hay productos EK.</p>';
@@ -889,6 +890,21 @@ function renderResumen() {
   ponN('#n-ek', pe.length ? `${pe.length} cliente${pe.length === 1 ? '' : 's'}${sinPesar ? ` · ${sinPesar} sin pesar` : ''}` : 'No hay EK', sinPesar);
   const msg = buildMsg(D); $('#msg').textContent = msg; $('#wa').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
 }
+// Textos de «Faltantes en proveedor» y «Clientes con faltas»: van en el mensaje general y en sus propios botones.
+function txtFaltProv(D) {
+  let o = 'FALTANTES EN PROVEEDOR', g = null;
+  D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { g = pr.g; o += `\n${g}`; } o += `\n• ${pr.c} ${pr.d} — pedido ${fmtQ(pr.q)}` + (m.estado === 'no' ? ' · NO HAY' : m.estado === 'parcial' ? ` · hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}` : '') + (m.nota ? `\n   Nota: ${m.nota}` : ''); });
+  return o;
+}
+function txtCliFaltas(D) {
+  let o = 'CLIENTES CON FALTAS';
+  ordenCli(D.porCli).forEach(p => { o += `\n• ${p} ${cliBy[p].nombre}`; D.porCli[p].forEach(x => { o += `\n   ${x.pr.d}: ` + (x.dec ? 'POR DECIDIR' : `lleva ${fmtQ(x.lv)} de ${fmtQ(x.a.q)}`); }); });
+  return o;
+}
+const conCabecera = t => `CONTROL · ANTONIO VIÑA · ${fmtF(fecha)}\n\n${t}`;
+// Botones «Enviar por WhatsApp» y «Copiar» de una sección del Resumen (solo oficina).
+const botonesSec = sec => esOficina() ? `<div class="btnrow" style="margin:10px 0 0"><a class="btn wa sm" data-wa-sec="${sec}" href="#" target="_blank" rel="noopener">Enviar por WhatsApp</a><button class="btn ghost sm" type="button" data-copiar-sec="${sec}">Copiar</button></div>` : '';
+function textoSec(sec, D) { return conCabecera(sec === 'prov' ? txtFaltProv(D) : txtCliFaltas(D)); }
 function buildMsg(D) {
   const P = dia.productos;
   const lineas = P.reduce((s, p) => s + p.a.length, 0), sep = P.reduce((s, p) => s + p.a.filter(a => lineaLista(p, a)).length, 0);
@@ -896,10 +912,8 @@ function buildMsg(D) {
   o += '\nCHÓFERES'; D.porChof.forEach(x => { o += `\n• ${x.ch.nombre}: ${x.clientes} clientes · separados ${x.sep}/${x.lineas}` + (x.alms.length ? ` · almacenes ${x.alms.join(', ')}` : ''); });
   if (D.sinCli) o += `\n• Sin chófer: ${D.sinCli} clientes`;
   o += '\n';
-  if (D.faltProv.length) { o += '\nFALTANTES EN PROVEEDOR'; let g = null; D.faltProv.forEach(pr => { const m = R(pr); if (pr.g !== g) { g = pr.g; o += `\n${g}`; } o += `\n• ${pr.c} ${pr.d} — pedido ${fmtQ(pr.q)}` + (m.estado === 'no' ? ' · NO HAY' : m.estado === 'parcial' ? ` · hay ${fmtQ(m.quedan ?? 0)} · faltan ${fmtQ(pr.q - (m.quedan ?? 0))}` : '') + (m.nota ? `\n   Nota: ${m.nota}` : ''); }); o += '\n'; }
-  else o += '\nSin faltantes en proveedor.\n';
-  const pc = ordenCli(D.porCli);
-  if (pc.length) { o += '\nCLIENTES CON FALTAS'; pc.forEach(p => { o += `\n• ${p} ${cliBy[p].nombre}`; D.porCli[p].forEach(x => { o += `\n   ${x.pr.d}: ` + (x.dec ? 'POR DECIDIR' : `lleva ${fmtQ(x.lv)} de ${fmtQ(x.a.q)}`); }); }); o += '\n'; }
+  o += '\n' + (D.faltProv.length ? txtFaltProv(D) : 'Sin faltantes en proveedor.') + '\n';
+  if (ordenCli(D.porCli).length) o += '\n' + txtCliFaltas(D) + '\n';
   const pe = ordenCli(D.ek);
   const conPeso = pe.filter(p => D.ek[p].some(x => x.pes > 0));
   if (conPeso.length) { o += '\nPESOS EK'; conPeso.forEach(p => { const xs = D.ek[p].filter(x => x.pes > 0); o += `\n• ${p} ${cliBy[p].nombre} — ${fmtKg(xs.reduce((s, x) => s + x.kg, 0))}`; xs.forEach(x => { o += `\n   ${x.pr.d}: ${fmtQ(x.lv)} pzs = ${fmtKg(x.kg)}` + (x.pes < Math.round(x.lv) ? ` (${x.pes}/${Math.round(x.lv)} pesadas)` : ''); }); }); o += '\n'; }
@@ -940,6 +954,10 @@ async function copiarTexto(t) {
   ta.remove();
   toast(ok ? 'Texto copiado' : 'No se pudo copiar: usa el botón de WhatsApp');
 }
+['#res-prov', '#res-cli'].forEach(sel => $(sel).addEventListener('click', e => {
+  const b = e.target.closest('[data-copiar-sec]'); if (!b || !dia) return;
+  copiarTexto(textoSec(b.dataset.copiarSec, datosResumen()));
+}));
 $('#res-arts').addEventListener('click', e => {
   const b = e.target.closest('[data-copiar-chof]'); if (!b || !dia) return;
   copiarTexto(msgChofer(b.dataset.copiarChof, datosResumen()));
@@ -1054,7 +1072,7 @@ function suscribirPedidos() {
 }
 function pedidoDe(g) {
   const gr = grupos().find(x => x.g === g); if (!gr) return null;
-  const asunto = `Pedido Distribuciones Antonio Viña · ${g} · ${fmtF(fecha)}`;
+  const asunto = `Antonio Viña – Pedido – ${g}`;
   const lineas = gr.items.map(pr => `• ${pr.c}  ${pr.d} — ${fmtQ(pr.q)} ${isEK(pr) ? 'EK' : (pr.um || 'UNIDAD')}`);
   const cuerpo = `Buenos días,\n\nEste es nuestro pedido para el día ${fmtF(fecha)} (almacén ${g}):\n\n${lineas.join('\n')}\n\nTotal: ${gr.items.length} producto${gr.items.length === 1 ? '' : 's'}.\n\nGracias.\nDistribuciones Antonio Viña`;
   const para = correosProv.alm[g] || [], cc = correosProv.reparto || [];
