@@ -56,5 +56,6 @@ Cada **pestaña** del navegador puede tener un usuario distinto, y se ven entre 
 6. **Resumen** muestra el avance por chófer, faltantes y pesos EK.
 7. Como oficina, en **Oficina → Pedidos a proveedores** toca «Revisar correo» para ver el correo de cada almacén antes de enviarlo.
 8. Como chófer, la pestaña **Envíos** muestra solo los pedidos de sus almacenes del día (con «Revisar correo», «Enviar pedido» y «Copiar»). El número de la pestaña son los que le faltan por enviar.
+9. Como oficina, en **Oficina → Extras de última hora** añade un producto para un cliente (busca el producto por su nombre) y otro para un cliente nuevo. Sale en Recogida, Clientes, Reparto y el correo al proveedor con la etiqueta «＋ extra».
 
 Para empezar de cero: botón **Borrar datos de prueba** en la franja amarilla.

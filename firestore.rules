@@ -44,6 +44,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if esOficina();
 
+      // Extras de última hora (clientes y productos que no vienen en los PDF): todos los ven,
+      // solo oficina los añade, cambia o borra.
+      match /extras/{id} {
+        allow read: if true;
+        allow write: if esOficina();
+      }
+
       // Marcas del día: recogida, reparto, clientes asignados, traspasos y almacenes por chófer.
       // Hay que haber entrado con PIN, y solo dentro de un día que exista.
       // Pedidos enviados a proveedores (quién y a qué hora).
