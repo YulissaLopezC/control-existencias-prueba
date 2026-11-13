@@ -51,8 +51,6 @@ service cloud.firestore {
         allow write: if esOficina();
       }
 
-      // Marcas del día: recogida, reparto, clientes asignados, traspasos y almacenes por chófer.
-      // Hay que haber entrado con PIN, y solo dentro de un día que exista.
       // Pedidos enviados a proveedores (quién y a qué hora).
       // Todos los que entran lo ven. Lo marca oficina (cualquier almacén) o el chófer
       // que tiene ese almacén asignado ese día (pestaña «Envíos»), y siempre a su nombre.
@@ -62,6 +60,8 @@ service cloud.firestore {
           || (conSesion() && esSuAlmacen(fecha, g) && request.resource.data.uid == request.auth.uid);
       }
 
+      // Marcas del día: recogida, reparto, clientes asignados, traspasos y almacenes por chófer.
+      // Hay que haber entrado con PIN, y solo dentro de un día que exista.
       match /{paso}/{id} {
         allow read: if true;
         allow write: if conSesion()
