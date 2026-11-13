@@ -6,7 +6,7 @@
 <title>Control de Existencias Viña</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="styles.css?v=45">
+<link rel="stylesheet" href="styles.css?v=46">
 </head>
 <body>
 <div class="demo-banner" id="demo-banner" hidden>
@@ -27,6 +27,7 @@
       <a href="#reparto" id="t-reparto">3 Reparto</a>
       <a href="#traspasos" id="t-traspasos">4 Traspasos</a>
       <a href="#resumen" id="t-resumen">Resumen</a>
+      <a href="#envios" id="t-envios" hidden>Envíos</a>
       <a href="#oficina" id="t-oficina" hidden>Oficina</a>
     </nav>
   </div>
@@ -155,6 +156,12 @@
     </div>
   </section>
 
+  <!-- ENVÍOS (chóferes) -->
+  <section id="v-envios" class="wrap" hidden>
+    <p class="small" style="margin:0">Pedidos a los proveedores de tus almacenes de hoy. Toca «Revisar correo» para ver el correo completo y, si está bien, «Enviar pedido»: se abre tu correo con todo escrito. Reparto va siempre en copia.</p>
+    <div id="envios"></div>
+  </section>
+
   <!-- OFICINA -->
   <section id="v-oficina" class="wrap" hidden>
     <div class="card plegable abierta" data-sec="alm">
@@ -214,6 +221,6 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script type="module" src="app.js?v=48"></script>
+<script type="module" src="app.js?v=49"></script>
 </body>
 </html>

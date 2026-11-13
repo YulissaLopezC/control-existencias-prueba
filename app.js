@@ -1,7 +1,7 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=23';
+} from './fb.js?v=24';
 import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar } from './parser.js?v=12';
 import { USUARIOS_DEMO } from './demo/usuarios.js?v=2';
 
@@ -45,23 +45,25 @@ function errGuardar(e) { console.error(e); toast(e && e.code === 'permission-den
 function errConexion(e) { console.error(e); toast('No se pudo conectar con la base de datos'); }
 
 /* ================= vistas ================= */
-const VISTAS = ['login', 'recogida', 'clientes', 'reparto', 'traspasos', 'resumen', 'oficina'];
+const VISTAS = ['login', 'recogida', 'clientes', 'reparto', 'traspasos', 'resumen', 'envios', 'oficina'];
 function vista() {
   if (!yo) return 'login';
   let v = (location.hash || '#recogida').slice(1);
   if (v === 'cargar') v = 'oficina';
   if (v === 'oficina' && !esOficina()) v = 'recogida';
+  if (v === 'envios' && !esChofer()) v = esOficina() ? 'oficina' : 'recogida'; // oficina envía desde Oficina → Pedidos a proveedores
   return VISTAS.includes(v) && v !== 'login' ? v : 'recogida';
 }
 function route() {
   const v = vista();
   VISTAS.forEach(n => { $('#v-' + n).hidden = n !== v; const t = $('#t-' + n); if (t) { if (n === v) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); } });
-  $('#tabs').hidden = !yo; $('#t-oficina').hidden = !esOficina();
+  $('#tabs').hidden = !yo; $('#t-oficina').hidden = !esOficina(); $('#t-envios').hidden = !esChofer();
   $('#bar').hidden = !(v === 'recogida' || v === 'reparto');
   if (v === 'resumen') renderResumen();
   if (v === 'traspasos') renderTraspasos();
   if (v === 'clientes') renderClientes();
   if (v === 'oficina') { renderOficina(); renderPedidos(); }
+  if (v === 'envios') renderEnvios();
   renderStats();
   window.scrollTo(0, 0);
 }
@@ -1056,19 +1058,26 @@ $('#almacenes').addEventListener('click', e => {
   toast(`${g}: ${ch ? nombreDe(ch) : 'sin chófer'} queda como habitual`); renderOficina();
 });
 
-/* ================= PEDIDOS A PROVEEDORES (solo oficina) ================= */
-// Los correos de cada almacén y el de reparto se guardan UNA vez (proveedores/correos).
+/* ================= PEDIDOS A PROVEEDORES (oficina) y ENVÍOS (chóferes) ================= */
+// Los correos de cada almacén y el de reparto se guardan UNA vez (proveedores/correos); solo oficina los cambia.
 // Cada día, «Enviar pedido» abre el correo de quien lo manda con todo escrito; reparto siempre va en copia.
+// Oficina envía el de cualquier almacén (Oficina → Pedidos a proveedores).
+// Cada chófer envía solo el de los almacenes que tiene asignados ese día (pestaña «Envíos»).
+// Antes de enviar se puede revisar el correo completo con «Revisar correo».
 let correosProv = { alm: {}, reparto: [] }, envios = {}, unsubProv = null, unsubEnv = null, editProv = null, editDraft = null, pegarProv = null;
+const verPed = new Set(); // almacenes con el correo desplegado para revisarlo
+let errProv = false;
+function renderProvs() { renderPedidos(); renderEnvios(); }
 const RE_MAIL = /^[^\s@,;<>()]+@[^\s@,;<>()]+\.[a-z]{2,}$/i;
 const partirCorreos = t => [...new Set(String(t || '').split(/[\s,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean))];
 function suscribirPedidos() {
   if (unsubProv) { unsubProv(); unsubProv = null; }
   if (unsubEnv) { unsubEnv(); unsubEnv = null; }
   envios = {};
-  if (!esOficina()) return;
-  unsubProv = onSnapshot(doc(db, 'proveedores', 'correos'), s => { const d = s.exists() ? s.data() : {}; correosProv = { alm: d.alm || {}, reparto: d.reparto || [] }; renderPedidos(); }, () => { $('#pedidos').innerHTML = '<p class="small">No se pudieron leer los correos (revisa las reglas de Firebase).</p>'; });
-  if (fecha) unsubEnv = onSnapshot(collection(db, 'dias', fecha, 'envios'), snap => { envios = {}; snap.forEach(x => envios[x.id] = x.data()); renderPedidos(); }, () => { });
+  errProv = false;
+  if (!esOficina() && !esChofer()) return;
+  unsubProv = onSnapshot(doc(db, 'proveedores', 'correos'), s => { const d = s.exists() ? s.data() : {}; correosProv = { alm: d.alm || {}, reparto: d.reparto || [] }; errProv = false; renderProvs(); }, () => { errProv = true; renderProvs(); });
+  if (fecha) unsubEnv = onSnapshot(collection(db, 'dias', fecha, 'envios'), snap => { envios = {}; snap.forEach(x => envios[x.id] = x.data()); renderProvs(); }, () => { });
 }
 function pedidoDe(g) {
   const gr = grupos().find(x => x.g === g); if (!gr) return null;
@@ -1079,12 +1088,36 @@ function pedidoDe(g) {
   const url = `mailto:${para.map(encodeURIComponent).join(',')}?${cc.length ? 'cc=' + cc.map(encodeURIComponent).join(',') + '&' : ''}subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
   return { asunto, cuerpo, para, cc, url, n: gr.items.length };
 }
+// Una fila de pedido (la usan oficina y chóferes): estado, revisar el correo completo, enviar y copiar.
+function filaPedido(g, extra = '') {
+  const P = pedidoDe(g), e = envios[g], ver = verPed.has(g);
+  const largo = P.url.length > 1900;
+  return `<div class="prov-row" data-g="${esc(g)}" data-busca="${esc(sinTildes(g))}"><div><b>${esc(g)}</b><small>${P.n} productos · ${P.para.length ? P.para.map(esc).join(', ') : `<span class="par">⚠ Sin correo${esOficina() ? '' : ': avisa a oficina'}</span>`}</small>
+      <small>${e ? `<span class="ok">✓ Enviado ${horaCan(e.ts)} · ${esc(e.nombre || '')}</span>` : P.para.length ? '— Sin enviar' : ''}</small></div>
+      <div class="btnrow"><button type="button" class="btn ghost sm" data-ver-ped="${esc(g)}" aria-expanded="${ver}">${ver ? 'Ocultar correo' : 'Revisar correo'}</button>${P.para.length ? `<a class="btn sm" href="${esc(P.url)}" data-enviar="${esc(g)}">${e ? 'Volver a enviar' : 'Enviar pedido'}</a>` : ''}<button type="button" class="btn ghost sm" data-copiar-ped="${esc(g)}">Copiar</button>${extra}</div>
+      ${ver ? `<pre class="msg ped-ver">${esc(textoPedido(P))}</pre>` : ''}
+      ${largo ? '<p class="hint" style="margin:0">Pedido largo: si tu correo lo corta, usa «Copiar» y pégalo.</p>' : ''}</div>`;
+}
+const textoPedido = P => `Para: ${P.para.join(', ') || '—'}\nCC: ${P.cc.join(', ') || '—'}\nAsunto: ${P.asunto}\n\n${P.cuerpo}`;
+// Pestaña «Envíos» (chóferes): solo los almacenes que tiene asignados hoy.
+function renderEnvios() {
+  const box = $('#envios'), tab = $('#t-envios'); if (!box) return;
+  if (!esChofer()) { box.innerHTML = ''; tab.textContent = 'Envíos'; return; }
+  const mios = misAlmacenes();
+  const pend = mios.filter(g => (correosProv.alm[g] || []).length && !envios[g]).length;
+  tab.textContent = pend ? `Envíos · ${pend}` : 'Envíos';
+  if (errProv) { box.innerHTML = '<p class="small">No se pudieron leer los correos de los proveedores. Avisa a oficina.</p>'; return; }
+  if (!dia) { box.innerHTML = '<div class="empty"><p>Cuando se cargue el día aparecerán aquí los pedidos de tus almacenes.</p></div>'; return; }
+  if (!mios.length) { box.innerHTML = '<div class="empty"><p>Hoy no tienes almacenes asignados. Oficina los asigna en «Almacenes del día».</p></div>'; return; }
+  box.innerHTML = '<div class="prov-list">' + mios.map(g => filaPedido(g)).join('') + '</div>';
+}
 function renderPedidos() {
   const box = $('#pedidos'), nP = $('#n-pedidos'); if (!box) return;
   if (!esOficina()) { box.innerHTML = ''; return; }
+  if (errProv) { box.innerHTML = '<p class="small">No se pudieron leer los correos (revisa las reglas de Firebase).</p>'; return; }
   const rep = correosProv.reparto || [];
   const editor = (clave, lista) => `<div class="prov-edit"><input type="text" id="prov-in" class="prov-in" data-clave="${esc(clave)}" value="${esc(editDraft ?? lista.join(', '))}" placeholder="correo1@ejemplo.com, correo2@ejemplo.com" inputmode="email" autocomplete="off"><div class="btnrow"><button type="button" class="btn sm" data-prov-guardar="${esc(clave)}">Guardar</button><button type="button" class="btn ghost sm" data-prov-cancelar>Cancelar</button></div><p class="hint" style="margin:0">Separa varios correos con coma. Déjalo vacío para quitarlos.</p></div>`;
-  let h = `<p class="small" style="margin:0">«Enviar pedido» abre tu correo con el pedido ya escrito; solo revisa y envía. Reparto va siempre en copia.</p>`;
+  let h = `<p class="small" style="margin:0">«Revisar correo» muestra el correo completo. «Enviar pedido» abre tu correo con el pedido ya escrito; solo revisa y envía. Reparto va siempre en copia.</p>`;
   h += `<div class="prov-row prov-rep"><div><b>Copia a reparto</b><small>${rep.length ? rep.map(esc).join(', ') : '<span class="par">⚠ Sin correo de reparto</span>'}</small></div>${editProv === '__reparto' ? '' : '<button type="button" class="add-nota" data-prov-editar="__reparto">Editar</button>'}</div>`;
   if (editProv === '__reparto') h += editor('__reparto', rep);
   if (!dia) { h += '<p class="small">Cuando se cargue el día aparecerán los pedidos de cada almacén.</p>'; nP.textContent = ''; nP.classList.remove('aviso'); }
@@ -1093,11 +1126,8 @@ function renderPedidos() {
     h += '<div class="prov-list">' + grupos().map(gr => {
       const g = gr.g, P = pedidoDe(g), e = envios[g];
       if (P.para.length && !e) pend++;
-      const largo = P.url.length > 1900;
-      return `<div class="prov-row" data-g="${esc(g)}" data-busca="${esc(sinTildes(g))}"><div><b>${esc(g)}</b><small>${P.n} productos · ${P.para.length ? P.para.map(esc).join(', ') : '<span class="par">⚠ Sin correo</span>'}</small>
-        <small>${e ? `<span class="ok">✓ Enviado ${horaCan(e.ts)} · ${esc(e.nombre || '')}</span>` : P.para.length ? '— Sin enviar' : ''}</small></div>
-        <div class="btnrow">${P.para.length ? `<a class="btn sm" href="${esc(P.url)}" data-enviar="${esc(g)}">${e ? 'Volver a enviar' : 'Enviar pedido'}</a>` : ''}<button type="button" class="btn ghost sm" data-copiar-ped="${esc(g)}">Copiar</button>${editProv === g ? '' : `<button type="button" class="add-nota" data-prov-editar="${esc(g)}">${P.para.length ? 'Editar correos' : 'Añadir correos'}</button>`}</div>
-        ${largo ? '<p class="hint" style="margin:0">Pedido largo: si tu correo lo corta, usa «Copiar» y pégalo.</p>' : ''}</div>` + (editProv === g ? editor(g, P.para) : '');
+      const extra = editProv === g ? '' : `<button type="button" class="add-nota" data-prov-editar="${esc(g)}">${P.para.length ? 'Editar correos' : 'Añadir correos'}</button>`;
+      return filaPedido(g, extra) + (editProv === g ? editor(g, P.para) : '');
     }).join('') + '</div><p class="small" id="ped-nada" style="margin:0" hidden>Ningún proveedor con esas siglas hoy.</p>';
     nP.textContent = pend ? `⚠ ${pend} sin enviar` : (Object.keys(envios).length ? '✓ Enviados' : 'Sin correos');
     nP.classList.toggle('aviso', !!pend);
@@ -1142,12 +1172,30 @@ function previsualizarLista() {
 }
 const guardarCorreos = cambio => setDoc(doc(db, 'proveedores', 'correos'), { ...cambio, ...firma() }, { merge: true }).then(() => true, e => { errGuardar(e); return false; });
 $('#pedidos').addEventListener('input', e => { if (e.target.id === 'prov-lista') { pegarProv = e.target.value; previsualizarLista(); } if (e.target.id === 'prov-in') editDraft = e.target.value; });
+// Botones comunes a «Pedidos a proveedores» (oficina) y «Envíos» (chóferes).
+function accionPedido(t) {
+  const ver = t.closest('[data-ver-ped]');
+  if (ver) { const g = ver.dataset.verPed; if (verPed.has(g)) verPed.delete(g); else verPed.add(g); renderProvs(); return true; }
+  const env = t.closest('[data-enviar]');
+  if (env) {
+    const g = env.dataset.enviar;
+    // Un chófer solo envía lo de sus almacenes (también lo comprueban las reglas de Firebase).
+    if (!esOficina() && chofAlm(g) !== (yo && yo.uid)) { toast('Ese almacén ya no está asignado a ti'); return true; }
+    setDoc(doc(db, 'dias', fecha, 'envios', g), { para: correosProv.alm[g] || [], cc: correosProv.reparto || [], ...firma() }).catch(errGuardar);
+    return true;
+  }
+  const cp = t.closest('[data-copiar-ped]');
+  if (cp) { copiarTexto(textoPedido(pedidoDe(cp.dataset.copiarPed))); return true; }
+  return false;
+}
+$('#envios').addEventListener('click', e => {
+  const env = e.target.closest('[data-enviar]');
+  if (env && !esOficina() && chofAlm(env.dataset.enviar) !== (yo && yo.uid)) e.preventDefault(); // no abrir el correo
+  accionPedido(e.target);
+});
 $('#pedidos').addEventListener('click', async e => {
   const t = e.target;
-  const env = t.closest('[data-enviar]');
-  if (env) { const g = env.dataset.enviar; setDoc(doc(db, 'dias', fecha, 'envios', g), { para: correosProv.alm[g] || [], cc: correosProv.reparto || [], ...firma() }).catch(errGuardar); return; }
-  const cp = t.closest('[data-copiar-ped]');
-  if (cp) { const P = pedidoDe(cp.dataset.copiarPed); copiarTexto(`Para: ${P.para.join(', ') || '—'}\nCC: ${P.cc.join(', ') || '—'}\nAsunto: ${P.asunto}\n\n${P.cuerpo}`); return; }
+  if (accionPedido(t)) return;
   const ed = t.closest('[data-prov-editar]');
   if (ed) { editProv = ed.dataset.provEditar; editDraft = null; pegarProv = null; renderPedidos(); const i = $('#pedidos .prov-in'); if (i) i.focus(); return; }
   if (t.closest('[data-prov-cancelar]')) { editProv = null; editDraft = null; pegarProv = null; renderPedidos(); return; }
@@ -1174,6 +1222,7 @@ function refreshAll() {
   refreshRecogida(); refreshReparto(); renderStats();
   const v = vista();
   if (v === 'resumen') renderResumen(); if (v === 'clientes') renderClientes(); if (v === 'traspasos') renderTraspasos(); if (v === 'oficina') renderOficina();
+  renderEnvios(); // también pone al día el contador de la pestaña
 }
 
 /* ================= días ================= */

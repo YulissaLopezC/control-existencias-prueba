@@ -23,6 +23,16 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // ¿El almacén g es del chófer que escribe ese día? Lo elegido para el día en
+    // «Almacenes del día»; si no se eligió nada, su chófer habitual.
+    function esSuAlmacen(fecha, g) {
+      let delDia = /databases/$(database)/documents/dias/$(fecha)/almacenes/$(g);
+      let ajustes = /databases/$(database)/documents/config/almacenes;
+      return exists(delDia)
+        ? get(delDia).data.get('chofer', null) == request.auth.uid
+        : (exists(ajustes) && get(ajustes).data.get('habitual', {}).get(g, null) == request.auth.uid);
+    }
+
     // Ajustes compartidos: almacenes habituales de cada chófer y prioridad de clientes.
     match /config/{doc} {
       allow read: if true;
@@ -36,9 +46,13 @@ service cloud.firestore {
 
       // Marcas del día: recogida, reparto, clientes asignados, traspasos y almacenes por chófer.
       // Hay que haber entrado con PIN, y solo dentro de un día que exista.
-      // Pedidos enviados a proveedores (quién y a qué hora): solo oficina.
+      // Pedidos enviados a proveedores (quién y a qué hora).
+      // Todos los que entran lo ven. Lo marca oficina (cualquier almacén) o el chófer
+      // que tiene ese almacén asignado ese día (pestaña «Envíos»), y siempre a su nombre.
       match /envios/{g} {
-        allow read, write: if esOficina();
+        allow read: if conSesion();
+        allow write: if esOficina()
+          || (conSesion() && esSuAlmacen(fecha, g) && request.resource.data.uid == request.auth.uid);
       }
 
       match /{paso}/{id} {
@@ -49,9 +63,11 @@ service cloud.firestore {
       }
     }
 
-    // Correos de los proveedores (por almacén) y de reparto: solo oficina los ve y los cambia.
+    // Correos de los proveedores (por almacén) y de reparto: los ve quien haya entrado
+    // (los chóferes los necesitan para «Envíos»); solo oficina los cambia.
     match /proveedores/{doc} {
-      allow read, write: if esOficina();
+      allow read: if conSesion();
+      allow write: if esOficina();
     }
 
     // Historial de cargas automáticas: lo ve oficina en la pestaña «Cargar».
