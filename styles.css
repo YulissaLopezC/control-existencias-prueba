@@ -321,7 +321,15 @@ small.tag-extra{display:block;padding:0;background:none;font-weight:700}
 .ex-form{display:grid;gap:8px}
 .ex-form label{display:grid;gap:4px;font-size:.85rem;font-weight:600;color:var(--muted)}
 .ex-form .field{width:100%;box-sizing:border-box}
-.ex-fila{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.ex-row .btnrow{align-items:center}
-.ex-row .ex-q{width:80px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit}
+.ex-fila{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:520px){.ex-fila{grid-template-columns:1fr 1fr}}
+.ex-cab{all:unset;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.ex-cab .small{grid-column:1;color:var(--muted)}
+.ex-cab .car{grid-row:1/3;grid-column:2;transition:transform .15s}
+.ex-cab[aria-expanded="false"] .car{transform:rotate(-90deg)}
+.ex-alm{display:grid;gap:4px}
+.ex-li{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
+.ex-li .code{font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
+.ex-li .d small{display:block;color:var(--muted);font-size:.75rem}
+.ex-li .ex-q{width:60px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit}
 

@@ -1065,17 +1065,21 @@ $('#almacenes').addEventListener('click', e => {
 });
 
 /* ================= EXTRAS DE ÚLTIMA HORA (solo oficina) ================= */
-// Clientes y productos que no vienen en los PDF, por almacén. Valen solo para ese día.
-// Se busca el producto por su nombre: la app sugiere los que ya han salido en los PDF de ese almacén.
+// Clientes y productos que no vienen en los PDF. Valen solo para ese día.
+// Se trabaja por cliente: se elige el cliente y se le añaden productos de cualquier almacén.
+// El producto se busca por nombre entre los que ya han salido en los PDF (de todos los almacenes):
+// al elegirlo se ponen solos su almacén, su código y su unidad. Cada producto va a la Recogida
+// y al correo de SU almacén.
 const exClave = t => sinTildes(t).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'cliente';
 const ponOpts = (el, html) => { if (el.dataset.h !== html) { const v = el.value; el.innerHTML = html; el.dataset.h = html; if (v && [...el.options].some(o => o.value === v)) el.value = v; } };
-// Productos conocidos de un almacén: los de hoy y los de los últimos días cargados.
-function productosConocidos(g) {
+const exCerradas = new Set(); // fichas de cliente plegadas
+// Productos conocidos (almacén + código): los de hoy y los de los últimos días cargados.
+function productosConocidos() {
   const m = new Map();
-  [dia ? dia.productos : [], ...dias.map(d => d.productos || [])].forEach(ps => ps.forEach(pr => { if (pr.g === g && !m.has(pr.c)) m.set(pr.c, { c: pr.c, d: pr.d, um: pr.um || 'UNIDAD' }); }));
-  return [...m.values()].sort((a, b) => a.d.localeCompare(b.d));
+  [dia ? dia.productos : [], ...dias.map(d => d.productos || [])].forEach(ps => ps.forEach(pr => { const k = pr.g + '|' + pr.c; if (!m.has(k)) m.set(k, { g: pr.g, c: pr.c, d: pr.d, um: pr.um || 'UNIDAD' }); }));
+  return [...m.values()].sort((a, b) => a.d.localeCompare(b.d) || a.g.localeCompare(b.g));
 }
-const optProd = pr => `${pr.d} · ${pr.c}`;
+const optProd = pr => `${pr.d} · ${pr.c} · ${pr.g}`;
 const optCli = c => `${c.nombre} · ${c.n}`;
 function exCliente() {
   const t = $('#ex-cli').value.trim(); if (!t) return null;
@@ -1084,59 +1088,64 @@ function exCliente() {
   return c ? { existe: true, c } : { existe: false, nombre: t };
 }
 function exInfo() {
-  const g = $('#ex-g').value, info = $('#ex-info'), cl = exCliente(), cod = $('#ex-c').value.trim();
+  const g = $('#ex-g').value, info = $('#ex-info'), cl = exCliente(), cod = $('#ex-c').value.trim().toUpperCase();
   $('#ex-n-l').hidden = !cl || cl.existe;
   const msgs = [];
   if (cl && !cl.existe) msgs.push('Cliente nuevo: no está en el día. Saldrá en «Clientes» para que un chófer lo tome.');
   const pr = dia && g && cod ? dia.productos.find(i => i.g === g && i.c === cod) : null;
   if (pr) {
     const a = cl && cl.existe ? pr.a.find(x => cl.c.pedidos.includes(x.p)) : null;
-    msgs.push(a ? `Este cliente ya pide ${fmtQ(a.q)} de este producto: se sumará y quedará marcado como extra.` : `Este producto ya está en ${g} hoy: se sumará a su línea.`);
+    msgs.push(a ? `Este cliente ya pide ${fmtQ(a.q)} de este producto en ${g}: se sumará y quedará marcado como extra.` : `Este producto ya está en ${g} hoy: se sumará a su línea.`);
     if (est(pr)) msgs.push('⚠ Ya está marcado en Recogida: avisa al chófer.');
-  }
+  } else if (cod && g) msgs.push(`Irá a la Recogida y al correo de ${g}.`);
   info.textContent = msgs.join(' ');
 }
 function renderExtras() {
   const form = $('#ex-form'); if (!form) return;
   const nE = $('#n-extras'), lista = $('#ex-lista');
-  const items = Object.entries(extras).map(([id, x]) => ({ id, ...x })).sort((a, b) => (a.g + a.nombre).localeCompare(b.g + b.nombre));
-  nE.textContent = items.length ? `${items.length} extra${items.length === 1 ? '' : 's'}` : '';
+  const items = Object.entries(extras).map(([id, x]) => ({ id, ...x }));
+  const porCli = new Map();
+  items.forEach(x => { if (!porCli.has(x.p)) porCli.set(x.p, []); porCli.get(x.p).push(x); });
+  nE.textContent = porCli.size ? `${porCli.size} cliente${porCli.size === 1 ? '' : 's'} · ${items.length} producto${items.length === 1 ? '' : 's'}` : '';
   form.hidden = !dia; $('#ex-sin-dia').hidden = !!dia;
   if (!dia) { lista.innerHTML = ''; return; }
   const gs = [...new Set([...grupos().map(x => x.g), ...dias.flatMap(d => (d.productos || []).map(p => p.g))])].sort();
-  ponOpts($('#ex-g'), '<option value="">Elige el almacén</option>' + gs.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(''));
+  ponOpts($('#ex-g'), '<option value="">Almacén</option>' + gs.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(''));
   ponOpts($('#ex-clis'), clientesDia().map(c => `<option value="${esc(optCli(c))}"></option>`).join(''));
-  const g = $('#ex-g').value;
-  ponOpts($('#ex-prods'), g ? productosConocidos(g).map(pr => `<option value="${esc(optProd(pr))}"></option>`).join('') : '');
+  ponOpts($('#ex-prods'), productosConocidos().map(pr => `<option value="${esc(optProd(pr))}"></option>`).join(''));
   const ums = [...new Set(['UNIDAD', 'EK', ...dia.productos.map(p => p.um || 'UNIDAD')])];
   ponOpts($('#ex-um'), ums.map(u => `<option value="${esc(u)}">${u === 'EK' ? 'EK (piezas)' : esc(u)}</option>`).join(''));
-  lista.innerHTML = items.length ? '<div class="prov-list">' + items.map(x => `<div class="prov-row ex-row" data-ex="${esc(x.id)}">
-      <div><b>${esc(x.g)} · ${esc(x.d)}</b><small>${esc(x.c)} · para ${esc(x.nombre)}${x.n && x.n !== x.p ? ' (' + esc(x.n) + ')' : ''}${x.cliNuevo ? ' · <span class="par">cliente nuevo</span>' : ''}</small>
-      <small>${esc(x.nombre_por || '')}${x.ts ? ' · ' + horaCan(x.ts) : ''}</small></div>
-      <div class="btnrow"><span class="step sm"><input class="ex-q" type="number" inputmode="decimal" min="0" step="any" value="${esc(x.q)}" aria-label="Cantidad"></span><span class="small">${esc(x.um === 'EK' ? 'EK' : x.um || 'UNIDAD')}</span><button type="button" class="btn ghost sm" data-ex-borrar="${esc(x.id)}">Borrar</button></div></div>`).join('') + '</div>'
-    : '<p class="small" style="margin:0">Hoy no hay extras.</p>';
+  const fichas = [...porCli.entries()].sort((a, b) => String(a[1][0].nombre).localeCompare(String(b[1][0].nombre))).map(([p, xs]) => {
+    const x0 = xs[0], cerrada = exCerradas.has(p);
+    const porAlm = new Map(); xs.forEach(x => { if (!porAlm.has(x.g)) porAlm.set(x.g, []); porAlm.get(x.g).push(x); });
+    const cuerpo = cerrada ? '' : [...porAlm.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([g, ys]) => `<div class="ex-alm"><div class="cp-h">${esc(g)}${chofAlm(g) ? ' · ' + esc(nombreDe(chofAlm(g))) : ''}</div>`
+      + ys.map(x => `<div class="ex-li" data-ex="${esc(x.id)}"><span class="code">${esc(x.c)}</span><span class="d">${esc(x.d)}<small>${esc(x.nombre_por || '')}${x.ts ? ' · ' + horaCan(x.ts) : ''}</small></span><input class="ex-q" type="number" inputmode="decimal" min="0" step="any" value="${esc(x.q)}" aria-label="Cantidad de ${esc(x.d)}"><span class="small">${esc(x.um === 'EK' ? 'EK' : x.um || 'UNIDAD')}</span><button type="button" class="add-nota" data-ex-borrar="${esc(x.id)}">Borrar</button></div>`).join('') + '</div>').join('')
+      + `<div class="btnrow"><button type="button" class="btn ghost sm" data-ex-mas="${esc(p)}">+ Añadir producto</button></div>`;
+    return `<div class="prov-row ex-ficha" data-ficha="${esc(p)}"><button type="button" class="ex-cab" data-ex-tog="${esc(p)}" aria-expanded="${!cerrada}"><b>${esc(x0.nombre)}${x0.n ? ' (' + esc(x0.n) + ')' : ''}</b><span class="small">${xs.some(x => x.cliNuevo) ? '<span class="par">cliente nuevo</span> · ' : ''}${xs.length} producto${xs.length === 1 ? '' : 's'} extra · ${[...porAlm.keys()].map(esc).join(', ')}</span><span class="car">▾</span></button>${cuerpo}</div>`;
+  });
+  lista.innerHTML = fichas.length ? '<div class="prov-list">' + fichas.join('') + '</div>' : '<p class="small" style="margin:0">Hoy no hay extras.</p>';
   exInfo();
 }
-$('#ex-g').addEventListener('change', () => { $('#ex-prod').value = ''; $('#ex-c').value = ''; renderExtras(); });
 $('#ex-cli').addEventListener('input', exInfo);
 $('#ex-c').addEventListener('input', exInfo);
+$('#ex-g').addEventListener('change', exInfo);
 $('#ex-prod').addEventListener('input', () => {
-  const g = $('#ex-g').value, t = $('#ex-prod').value.trim();
-  const pr = g && productosConocidos(g).find(x => optProd(x) === t);
-  if (pr) { $('#ex-c').value = pr.c; $('#ex-um').value = pr.um; }
+  const t = $('#ex-prod').value.trim();
+  const pr = productosConocidos().find(x => optProd(x) === t);
+  if (pr) { $('#ex-g').value = pr.g; $('#ex-c').value = pr.c; $('#ex-um').value = pr.um; $('#ex-q').focus(); }
   exInfo();
 });
 $('#ex-form').addEventListener('submit', async e => {
   e.preventDefault();
   if (!esOficina() || !fecha) return;
-  const g = $('#ex-g').value, cl = exCliente(), t = $('#ex-prod').value.trim(), c = $('#ex-c').value.trim().toUpperCase(), q = Number(String($('#ex-q').value).replace(',', '.'));
-  if (!g) { toast('Elige el almacén'); return; }
-  if (!cl) { toast('Escribe el cliente'); return; }
+  const cl = exCliente(), t = $('#ex-prod').value.trim(), g = $('#ex-g').value, c = $('#ex-c').value.trim().toUpperCase(), q = Number(String($('#ex-q').value).replace(',', '.'));
+  if (!cl) { toast('Primero elige el cliente'); $('#ex-cli').focus(); return; }
   if (!t) { toast('Escribe el producto'); return; }
+  if (!g) { toast('Elige el almacén del producto'); return; }
   if (!c) { toast('Falta el código del producto'); return; }
   if (!(q > 0)) { toast('Escribe una cantidad mayor que 0'); return; }
-  const conocido = productosConocidos(g).find(x => optProd(x) === t || x.c === c);
-  const d = conocido && conocido.c === c ? conocido.d : t.replace(/ · [^·]*$/, '');
+  const conocido = productosConocidos().find(x => x.g === g && x.c === c);
+  const d = conocido ? conocido.d : t.replace(/( · [^·]*){1,2}$/, '');
   let datosCli;
   if (cl.existe) datosCli = { p: cl.c.pedidos[0], n: cl.c.n, nombre: cl.c.nombre, cliNuevo: false };
   else {
@@ -1149,12 +1158,12 @@ $('#ex-form').addEventListener('submit', async e => {
   const f = firma();
   const ok = await setDoc(doc(db, 'dias', fecha, 'extras', id), { g, c, d, um: $('#ex-um').value || 'UNIDAD', q, ...datosCli, nombre_por: f.nombre, uid: f.uid, ts: f.ts }).then(() => true, x => { errGuardar(x); return false; });
   if (!ok) return;
-  toast(`Extra añadido: ${fmtQ(q)} ${d} para ${datosCli.nombre}`);
-  if (envios[g]) toast(`El pedido de ${g} ya se envió: vuelve a enviarlo`);
-  // El cliente queda escrito tal como sale en la lista, para seguir añadiéndole productos.
+  toast(envios[g] ? `Añadido. El pedido de ${g} ya se envió: vuelve a enviarlo` : `Añadido: ${fmtQ(q)} ${d} (${g}) para ${datosCli.nombre}`);
+  exCerradas.delete(datosCli.p);
+  // El cliente queda escrito, para seguir añadiéndole productos.
   $('#ex-cli').value = optCli({ nombre: datosCli.nombre, n: datosCli.n || datosCli.p });
-  $('#ex-prod').value = ''; $('#ex-c').value = ''; $('#ex-q').value = ''; $('#ex-n').value = '';
-  $('#ex-prod').focus();
+  $('#ex-prod').value = ''; $('#ex-g').value = ''; $('#ex-c').value = ''; $('#ex-q').value = ''; $('#ex-n').value = '';
+  exInfo(); $('#ex-prod').focus();
 });
 $('#ex-lista').addEventListener('change', e => {
   const i = e.target.closest('.ex-q'); if (!i) return;
@@ -1164,6 +1173,16 @@ $('#ex-lista').addEventListener('change', e => {
   setDoc(doc(db, 'dias', fecha, 'extras', id), { q, nombre_por: f.nombre, uid: f.uid, ts: f.ts }, { merge: true }).then(() => toast('Cantidad cambiada'), errGuardar);
 });
 $('#ex-lista').addEventListener('click', e => {
+  const tg = e.target.closest('[data-ex-tog]');
+  if (tg) { const p = tg.dataset.exTog; if (exCerradas.has(p)) exCerradas.delete(p); else exCerradas.add(p); renderExtras(); return; }
+  const mas = e.target.closest('[data-ex-mas]');
+  if (mas) {
+    const x = Object.values(extras).find(y => y.p === mas.dataset.exMas); if (!x) return;
+    $('#ex-cli').value = optCli({ nombre: x.nombre, n: x.n || x.p });
+    $('#ex-prod').value = ''; $('#ex-g').value = ''; $('#ex-c').value = ''; $('#ex-q').value = '';
+    exInfo(); $('#ex-form').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('#ex-prod').focus();
+    return;
+  }
   const b = e.target.closest('[data-ex-borrar]'); if (!b) return;
   const x = extras[b.dataset.exBorrar]; if (!x || !confirm(`¿Borrar el extra de ${x.d} para ${x.nombre}?`)) return;
   deleteDoc(doc(db, 'dias', fecha, 'extras', b.dataset.exBorrar)).then(() => toast('Extra borrado'), errGuardar);
