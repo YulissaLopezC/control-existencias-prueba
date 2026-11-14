@@ -51,6 +51,12 @@ service cloud.firestore {
         allow write: if esOficina();
       }
 
+      // «En revisión (oficina)» en Reparto, por producto: todos lo ven, solo oficina lo marca.
+      match /revision/{k} {
+        allow read: if true;
+        allow write: if esOficina();
+      }
+
       // Pedidos enviados a proveedores (quién y a qué hora).
       // Todos los que entran lo ven. Lo marca oficina (cualquier almacén) o el chófer
       // que tiene ese almacén asignado ese día (pestaña «Envíos»), y siempre a su nombre.

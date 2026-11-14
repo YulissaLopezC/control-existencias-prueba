@@ -47,7 +47,7 @@ if (LOCAL) {
       const borrarCol = async ref => { const s = await F.getDocs(ref); await Promise.all(s.docs.map(x => F.deleteDoc(x.ref))); };
       const dias = await F.getDocs(m.collection(db, 'dias'));
       for (const d of dias.docs) {
-        for (const sub of ['recogida', 'reparto', 'asignaciones', 'traspasos', 'almacenes', 'envios', 'extras']) await borrarCol(F.collection(db, PRE + 'dias', d.id, sub));
+        for (const sub of ['recogida', 'reparto', 'asignaciones', 'traspasos', 'almacenes', 'envios', 'extras', 'revision']) await borrarCol(F.collection(db, PRE + 'dias', d.id, sub));
         await F.deleteDoc(d.ref);
       }
       await borrarCol(m.collection(db, 'config'));
