@@ -6,6 +6,7 @@ html{-webkit-text-size-adjust:100%}:root{padding-top:env(safe-area-inset-top,0px
   --fg:#16212b; --muted:#5b6876; --accent:#1d4e89; --accent-fg:#ffffff;
   --ok:#1e7b4f; --ok-bg:#e3f3ea; --warn:#a35f00; --warn-bg:#fff1d9; --bad:#b3261e; --bad-bg:#fde7e5;
   --shadow:0 1px 2px rgba(22,33,43,.08);
+  --rev:#e0b000; --rev-bg:#fff8d6; --rev-box:#ffeb99; --rev-fg:#6b5200; --chk:#3d7cc9; --chk-bg:#e3eefb; --chk-fg:#1d4f8f;
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-label:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -14,11 +15,13 @@ html{-webkit-text-size-adjust:100%}:root{padding-top:env(safe-area-inset-top,0px
   --bg:#0f151b; --surface:#18212a; --surface-2:#1e2833; --line:#2c3845;
   --fg:#e6ecf2; --muted:#9aa8b6; --accent:#7fb0ec; --accent-fg:#0b1824;
   --ok:#5fd19a; --ok-bg:#16352a; --warn:#f2b55a; --warn-bg:#3a2b12; --bad:#ff8a80; --bad-bg:#3d1c1a;
+  --rev:#e0b000; --rev-bg:#2e260c; --rev-box:#4a3b0a; --rev-fg:#ffd866; --chk:#6aa3e8; --chk-bg:#152a44; --chk-fg:#9cc4f5;
   --shadow:none; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f151b; --surface:#18212a; --surface-2:#1e2833; --line:#2c3845;
   --fg:#e6ecf2; --muted:#9aa8b6; --accent:#7fb0ec; --accent-fg:#0b1824;
   --ok:#5fd19a; --ok-bg:#16352a; --warn:#f2b55a; --warn-bg:#3a2b12; --bad:#ff8a80; --bad-bg:#3d1c1a;
+  --rev:#e0b000; --rev-bg:#2e260c; --rev-box:#4a3b0a; --rev-fg:#ffd866; --chk:#6aa3e8; --chk-bg:#152a44; --chk-fg:#9cc4f5;
   --shadow:none; color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -316,7 +319,7 @@ h2.tit{font-family:var(--f-label);font-size:1.1rem;letter-spacing:.04em;text-tra
 #v-envios{display:grid;gap:10px}
 
 /* ---------- Extras de última hora ---------- */
-.tag-extra{background:#fff1d6;color:#8a5a00}
+.tag-extra{background:var(--warn-bg);color:var(--warn)}
 small.tag-extra{display:block;padding:0;background:none;font-weight:700}
 .ex-form{display:grid;gap:8px}
 .ex-form label{display:grid;gap:4px;font-size:.85rem;font-weight:600;color:var(--muted)}
@@ -332,4 +335,14 @@ small.tag-extra{display:block;padding:0;background:none;font-weight:700}
 .ex-li .code{font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
 .ex-li .d small{display:block;color:var(--muted);font-size:.75rem}
 .ex-li .ex-q{width:60px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit}
+
+/* ---------- Reparto: «En revisión (oficina)» ---------- */
+.prod.en-rev{background:var(--rev-bg);border-color:var(--rev);border-left-color:var(--rev)}
+.prod.revisado{border-left-color:var(--chk)}
+.rev-box{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px}
+.rev-box small{display:block;color:var(--muted);font-size:.8rem}
+.rev-box.en{background:var(--rev-box);color:var(--rev-fg)}
+.rev-box.ok{background:var(--chk-bg);color:var(--chk-fg)}
+.rev-of{display:flex;justify-content:flex-end;margin-top:-4px}
+.cli .sepb[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
 

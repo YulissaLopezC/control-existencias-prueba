@@ -1,7 +1,7 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=25';
+} from './fb.js?v=26';
 import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar, keyOf } from './parser.js?v=12';
 import { USUARIOS_DEMO } from './demo/usuarios.js?v=2';
 
@@ -26,6 +26,9 @@ let rec = {}, rep = {}, asig = {}, almDia = {}, tras = {};
 // Extras de última hora (oficina): productos que no vienen en los PDF, por almacén y cliente.
 // Se guardan aparte (dias/{fecha}/extras) y se suman al día como si vinieran en el PDF.
 let extras = {}, diaBase = null;
+// «En revisión (oficina)» en Reparto, por producto: dias/{fecha}/revision/{k}.
+// estado 'revision' (amarillo: el chófer no puede separarlo) o 'revisado' (azul). Sin documento = normal.
+let revi = {};
 let usuarios = {}, habitual = {}, yo = null;
 // Clientes marcados como prioritarios. Se guarda por número de cliente y NO se borra al cambiar de día:
 // lo que se marca hoy sirve para priorizarlo mañana.
@@ -198,6 +201,10 @@ const lleva = (pr, a) => {
   return a.q;
 };
 const separado = (pr, p) => !!cliRep(pr, p).ok;
+const revEst = pr => (revi[pr.k] || {}).estado || null;
+const enRevision = pr => revEst(pr) === 'revision';
+// Mientras oficina lo revisa, el chófer no puede separarlo ni cambiar lo que lleva.
+const bloqueadoRev = pr => enRevision(pr) && !esOficina();
 // Una línea está lista si se separó o si ese cliente no lleva nada.
 const lineaLista = (pr, a) => separado(pr, a.p) || lleva(pr, a) === 0;
 const sumaLleva = pr => pr.a.reduce((s, a) => s + lleva(pr, a), 0);
@@ -482,7 +489,7 @@ function buildReparto() {
   refreshReparto();
 }
 function prodHTML(pr, filas) {
-  const d = disponible(pr), sum = sumaLleva(pr), ek = isEK(pr), todos = filas.length === pr.a.length;
+  const d = disponible(pr), sum = sumaLleva(pr), ek = isEK(pr), todos = filas.length === pr.a.length, bloq = bloqueadoRev(pr);
   let alerta = '';
   if (corto(pr)) {
     const sobra = sum - d;
@@ -494,21 +501,43 @@ function prodHTML(pr, filas) {
     const cl = cliBy[a.p] || { nombre: 'Pedido ' + a.p, n: '' };
     const lv = lleva(pr, a), ok = separado(pr, a.p), ch = chofPed(a.p);
     let row2 = '';
-    if (corto(pr)) row2 += `<span class="small">Lleva</span><span class="step sm"><button type="button" data-lv="-1" aria-label="Menos">−</button><input class="lleva" type="number" inputmode="numeric" min="0" max="${a.q}" step="1" value="${lv}" aria-label="Lleva"><button type="button" data-lv="1" aria-label="Más">+</button></span><span class="small">de ${fmtQ(a.q)}</span>`;
+    if (corto(pr)) row2 += `<span class="small">Lleva</span><span class="step sm"><button type="button" data-lv="-1" aria-label="Menos">−</button><input class="lleva" type="number" inputmode="numeric" min="0" max="${a.q}" step="1" value="${lv}" aria-label="Lleva"${bloq ? ' disabled' : ''}><button type="button" data-lv="1" aria-label="Más">+</button></span><span class="small">de ${fmtQ(a.q)}</span>`;
     if (ek && lv > 0) {
       const ps = pesosDe(pr, a.p); const n = Math.round(lv);
-      row2 += `<div class="pesos">${Array.from({ length: n }, (_, i) => `<input class="peso" data-i="${i}" type="text" inputmode="decimal" placeholder="kg ${i + 1}" value="${ps[i] != null ? String(ps[i]).replace('.', ',') : ''}" aria-label="Peso pieza ${i + 1}">`).join('')}<span class="kg">= ${fmtKg(kgCli(pr, a))}</span></div>`;
+      row2 += `<div class="pesos">${Array.from({ length: n }, (_, i) => `<input class="peso" data-i="${i}" type="text" inputmode="decimal" placeholder="kg ${i + 1}" value="${ps[i] != null ? String(ps[i]).replace('.', ',') : ''}" aria-label="Peso pieza ${i + 1}"${bloq ? ' disabled' : ''}>`).join('')}<span class="kg">= ${fmtKg(kgCli(pr, a))}</span></div>`;
     }
     return `<div class="cli${ok ? ' sep' : ''}${prioPed(a.p) ? ' prio' : ''}" data-p="${esc(a.p)}">
       <div class="cn">${prioPed(a.p) ? '⚡ ' : ''}${esc(cl.nombre)}<small>Pedido ${esc(a.p)} · ${fmtQ(a.q)} ${ek ? 'pzs' : 'uds'}${lv !== a.q ? ` · lleva ${fmtQ(lv)}` : ''}</small>${chipExtra(a.q, a.extra)}${ambito[2] === 'todos' || !esChofer() ? chipChof(ch) : ''}</div>
-      ${lv === 0 && !ok ? '<span class="chip-st bad">No lleva</span>' : `<button type="button" class="sepb" aria-pressed="${ok}">${ok ? '✓ Separado' : 'Separar'}</button>`}
+      ${lv === 0 && !ok ? '<span class="chip-st bad">No lleva</span>' : `<button type="button" class="sepb" aria-pressed="${ok}"${bloq ? ' aria-disabled="true"' : ''}>${ok ? '✓ Separado' : 'Separar'}</button>`}
       ${row2 ? `<div class="row2">${row2}</div>` : ''}
     </div>`;
   }).join('');
   return `<div class="row1"><span class="code">${esc(pr.c)}</span><span class="qty"><b>${fmtQ(pr.q)}</b> ${ek ? '<span class="um ek">EK · piezas</span>' : 'uds'}</span></div>
     <p class="desc">${esc(pr.d)}</p>
     <div class="meta">${estadoRecChip(pr)}${chipExtra(pr.q, pr.extra)}${ek ? `<span class="chip-st">${fmtKg(kgProd(pr))} en total</span>` : ''}<span class="chip-st">${todos ? pr.a.length + ' cliente' + (pr.a.length === 1 ? '' : 's') : filas.length + ' de ' + pr.a.length + ' clientes son tuyos'}</span></div>
-    ${alerta}<div class="clis">${rows}</div>`;
+    ${revisionHTML(pr)}${alerta}<div class="clis">${rows}</div>`;
+}
+// Franja de revisión de oficina en cada producto de Reparto.
+function revisionHTML(pr) {
+  const r = revi[pr.k] || {}, e = r.estado, quien = r.nombre ? `${esc(r.nombre)} · ${horaCan(r.ts)}` : '';
+  const btn = (v, txt, cls = 'ghost') => `<button type="button" class="btn ${cls} sm" data-rev="${v}">${txt}</button>`;
+  if (e === 'revision') return `<div class="rev-box en"><span><b>🟡 En revisión (oficina)</b><small>${quien}${esOficina() ? '' : ' · Espera a que oficina lo marque como revisado para separarlo.'}</small></span>`
+    + (esOficina() ? `<span class="btnrow">${btn('revisado', '✓ Revisado', '')}${btn('quitar', 'Quitar')}</span>` : '') + '</div>';
+  if (e === 'revisado') return `<div class="rev-box ok"><span><b>✓ Revisado por oficina</b><small>${quien}</small></span>`
+    + (esOficina() ? `<span class="btnrow">${btn('revision', '🟡 Revisar')}${btn('quitar', 'Quitar')}</span>` : '') + '</div>';
+  return esOficina() ? `<div class="rev-of">${btn('revision', '🟡 Revisar')}</div>` : '';
+}
+function marcarRevision(pr, v) {
+  if (!esOficina() || !fecha) return;
+  const ref = doc(db, 'dias', fecha, 'revision', pr.k), cur = revi[pr.k] || {}, f = firma();
+  if (v === 'quitar') { delete revi[pr.k]; deleteDoc(ref).catch(errGuardar); toast('Revisión quitada'); }
+  else {
+    // Al marcar «Revisado» se guarda también quién lo puso en revisión (para Control de tiempos).
+    const nuevo = { estado: v, codigo: pr.c, nombre: f.nombre, uid: f.uid, ts: f.ts, ...(v === 'revisado' && cur.estado === 'revision' ? { inicio: { nombre: cur.nombre, uid: cur.uid, ts: cur.ts } } : {}) };
+    revi[pr.k] = nuevo; setDoc(ref, nuevo).catch(errGuardar);
+    toast(v === 'revision' ? '🟡 En revisión: los chóferes no pueden separarlo' : '✓ Revisado: ya se puede separar');
+  }
+  refreshAll();
 }
 function refreshReparto() {
   if (!dia) return;
@@ -523,6 +552,7 @@ function refreshReparto() {
       else { el.innerHTML = html; cache2[pr.k] = html; el.dataset.dirty = ''; }
     }
     el.classList.toggle('done', prodListo(pr, filas)); el.classList.toggle('alerta', porDecidir(pr)); el.classList.toggle('nohay', est(pr) === 'no');
+    el.classList.toggle('en-rev', enRevision(pr)); el.classList.toggle('revisado', revEst(pr) === 'revisado');
     const okQ = !q || pr.c.toLowerCase().includes(q) || pr.d.toLowerCase().includes(q) || filas.some(a => ((cliBy[a.p] || {}).nombre || '').toLowerCase().includes(q));
     const okF = f === 'todos' || (f === 'pend' && !prodListo(pr, filas)) || (f === 'falt' && corto(pr)) || (f === 'ek' && isEK(pr));
     el.hidden = !(okQ && okF);
@@ -530,7 +560,8 @@ function refreshReparto() {
   document.querySelectorAll('#lista2 .sec').forEach(sec => {
     const g = sec.dataset.g, its = dia.productos.filter(i => i.g === g && filasVisibles(i).length);
     const done = its.filter(i => prodListo(i, filasVisibles(i))).length, comp = its.length > 0 && done === its.length;
-    sec.querySelector('.cnt').textContent = comp ? `✓ Completo · ${its.length} productos separados` : `${done} de ${its.length} productos separados`;
+    const nRev = its.filter(enRevision).length;
+    sec.querySelector('.cnt').textContent = (comp ? `✓ Completo · ${its.length} productos separados` : `${done} de ${its.length} productos separados`) + (nRev ? ` · ${nRev} en revisión` : '');
     sec.querySelector('.alm-chof').innerHTML = chipChof(chofAlm(g));
     sec.classList.toggle('completo', comp);
     sec.querySelector('[data-allsep]').hidden = comp;
@@ -561,7 +592,7 @@ function saveRep(pr, p, patch) {
 // «Mis clientes» solo marca las de sus clientes). Quedan sin separar los productos con «No hay»,
 // «Faltan algunas» o nota, y los EK sin todos los pesos.
 const sinNovedad = pr => (!est(pr) || est(pr) === 'si') && !(R(pr).nota && R(pr).nota.trim()) && !porDecidir(pr);
-const lineasSinNovedad = pr => !sinNovedad(pr) ? [] : filasVisibles(pr).filter(a => !separado(pr, a.p) && lleva(pr, a) > 0
+const lineasSinNovedad = pr => !sinNovedad(pr) || enRevision(pr) ? [] : filasVisibles(pr).filter(a => !separado(pr, a.p) && lleva(pr, a) > 0
   && (!isEK(pr) || piezasPesadas(pr, a) >= Math.round(lleva(pr, a))));
 function marcarTodoSeparado(g) {
   if (!fecha || !dia) return;
@@ -570,7 +601,7 @@ function marcarTodoSeparado(g) {
   const n = lote.reduce((s, x) => s + x.as.length, 0);
   if (!n) { toast('No hay líneas sin novedad por separar'); return; }
   const quedan = its.filter(pr => !prodListo(pr, filasVisibles(pr)) && !lote.some(x => x.pr === pr)).length;
-  if (!confirm(`Proveedor ${g}: se marcarán ${n} línea${n === 1 ? '' : 's'} como separada${n === 1 ? '' : 's'}.` + (quedan ? `\n${quedan} producto${quedan === 1 ? '' : 's'} con novedad quedan sin separar para revisarlos.` : ''))) return;
+  if (!confirm(`Proveedor ${g}: se marcarán ${n} línea${n === 1 ? '' : 's'} como separada${n === 1 ? '' : 's'}.` + (quedan ? `\n${quedan} producto${quedan === 1 ? '' : 's'} con novedad o en revisión quedan sin separar.` : ''))) return;
   const antes = grupoListo(2, g), f = firma();
   lote.forEach(({ pr, as }) => {
     const cur = rep[pr.k] || { cli: {} }, cli = { ...(cur.cli || {}) }, cambios = {};
@@ -592,7 +623,10 @@ $('#lista2').addEventListener('click', e => {
   if (sg) { siguiente(2, sg.dataset.sig, false); return; }
   const as = e.target.closest('[data-allsep]');
   if (as) { marcarTodoSeparado(as.dataset.allsep); return; }
+  const rv = e.target.closest('[data-rev]');
+  if (rv) { const pr = prodByK(rv.closest('.prod').dataset.k); if (pr) marcarRevision(pr, rv.dataset.rev); return; }
   const c = ctxRep(e); if (!c) return;
+  if (bloqueadoRev(c.pr) && e.target.closest('.sepb, [data-lv]')) { toast('🟡 Oficina lo está revisando: espera a que lo marque como revisado'); return; }
   if (e.target.closest('.sepb')) {
     const ok = !separado(c.pr, c.a.p);
     if (ok && isEK(c.pr) && piezasPesadas(c.pr, c.a) < Math.round(lleva(c.pr, c.a))) toast('Ojo: faltan pesos por escribir');
@@ -1001,6 +1035,11 @@ function eventos() {
     });
     if (!Object.values(m.cli || {}).some(c => c.ts)) add(m.ts, m.uid, `Reparto · ${pr.c} ${pr.d}`);
   });
+  Object.entries(revi).forEach(([k, r]) => {
+    const pr = prod(k); if (!pr) return;
+    if (r.inicio) add(r.inicio.ts, r.inicio.uid, `Reparto · ${pr.g} ${pr.c} ${pr.d} — en revisión (oficina)`);
+    add(r.ts, r.uid, `Reparto · ${pr.g} ${pr.c} ${pr.d} — ${r.estado === 'revisado' ? 'revisado por oficina' : 'en revisión (oficina)'}`);
+  });
   Object.entries(asig).forEach(([n, a]) => add(a.ts, a.uid, `Clientes · tomó el cliente ${n}${a.chofer && a.chofer !== a.uid ? ' → ' + nombreDe(a.chofer) : ''}`));
   Object.entries(tras).forEach(([id, t]) => { const pr = prod(String(id).split('__')[0]); add(t.ts, t.uid, `Traspasos · entregó ${pr ? pr.d : id}`); });
   Object.entries(almDia).forEach(([g, a]) => add(a.ts, a.uid, `Oficina · asignó el almacén ${g} a ${a.chofer ? nombreDe(a.chofer) : 'nadie'}`));
@@ -1404,11 +1443,11 @@ function selectFecha(id) {
   renderFechas();
   buildRecogida(); buildReparto();
   if (changed) {
-    rec = {}; rep = {}; asig = {}; almDia = {}; tras = {}; extras = {};
+    rec = {}; rep = {}; asig = {}; almDia = {}; tras = {}; extras = {}; revi = {};
     subsDia.forEach(u => u()); subsDia = [];
     if (fecha) subsDia = [
       coleccion('recogida', m => rec = m), coleccion('reparto', m => rep = m), coleccion('asignaciones', m => asig = m),
-      coleccion('almacenes', m => almDia = m), coleccion('traspasos', m => tras = m),
+      coleccion('almacenes', m => almDia = m), coleccion('traspasos', m => tras = m), coleccion('revision', m => revi = m),
       coleccion('extras', m => { extras = m; setDia(diaBase); buildRecogida(); buildReparto(); renderPedidos(); }),
     ];
   }
