@@ -1,9 +1,9 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=26';
+} from './fb.js?v=27';
 import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar, keyOf } from './parser.js?v=12';
-import { USUARIOS_DEMO } from './demo/usuarios.js?v=2';
+import { USUARIOS_DEMO } from './demo/usuarios.js?v=3';
 
 /* ================= utilidades ================= */
 const $ = s => document.querySelector(s);
@@ -39,6 +39,8 @@ const filtro = { 1: 'todos', 2: 'todos', 3: 'sin' }, busq = { 1: '', 2: '', 3: '
 const ambito = { 1: 'mios', 2: 'mios' };
 const esOficina = () => !!yo && yo.rol === 'oficina';
 const esChofer = () => !!yo && yo.rol === 'chofer';
+// Desarrollo: ve las funciones nuevas mientras se prueban (marca «dev» en su usuario; su rol no cambia).
+const esDev = () => !!yo && !!yo.dev;
 const choferes = () => Object.entries(usuarios).filter(([, u]) => u.rol === 'chofer').sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9)).map(([uid, u]) => ({ uid, ...u }));
 // «Urgente» no es una persona: es donde se deja un pedido que un chófer no puede entregar, para que otro lo tome.
 const URGENTE_UID = 'u-urgente';
@@ -1085,7 +1087,7 @@ function renderOficina() {
   }
   // Usuarios
   $('#n-usuarios').textContent = `${Object.values(usuarios).filter(u => !u.sinLogin).length} personas`;
-  $('#usuarios').innerHTML = Object.entries(usuarios).sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9)).map(([uid, u]) => `<li>${chipChof(uid, u.nombre)} <span class="small">${u.rol === 'oficina' ? 'Oficina' : 'Chófer'}${DEMO && u.pinDemo ? ' · PIN de prueba ' + esc(u.pinDemo) : ''}</span></li>`).join('');
+  $('#usuarios').innerHTML = Object.entries(usuarios).sort((a, b) => (a[1].orden ?? 9) - (b[1].orden ?? 9)).map(([uid, u]) => `<li>${chipChof(uid, u.nombre)} <span class="small">${u.rol === 'oficina' ? 'Oficina' : 'Chófer'}${u.dev ? ' · Desarrollo' : ''}${DEMO && u.pinDemo ? ' · PIN de prueba ' + esc(u.pinDemo) : ''}</span></li>`).join('');
 }
 $('#almacenes').addEventListener('change', e => {
   const s = e.target.closest('.alm-sel'); if (!s || !fecha) return;

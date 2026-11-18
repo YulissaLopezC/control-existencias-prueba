@@ -42,7 +42,7 @@ for (const u of USUARIOS_DEMO) {
     }
   } else console.log(`Buzón (sin cuenta): ${u.nombre}`);
   await db.doc(`usuarios/${u.uid}`).set({
-    nombre: u.nombre, rol: u.rol, color: u.color, email, orden: u.orden, sinLogin: !!u.sinLogin,
+    nombre: u.nombre, rol: u.rol, color: u.color, email, orden: u.orden, sinLogin: !!u.sinLogin, dev: !!u.dev,
   });
 }
 console.log(`Listo: ${USUARIOS_DEMO.length} usuarios en la colección «usuarios».`);
