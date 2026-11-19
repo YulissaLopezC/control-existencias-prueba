@@ -41,6 +41,7 @@ Cada día es una lista nueva: la app abre siempre en el día de hoy (hora de Can
 - `automatico/crear-usuarios.mjs` y `.github/workflows/crear-usuarios.yml` — crean o actualizan las cuentas reales (Actions → «Crear usuarios» → Run workflow). Para añadir una persona se edita `demo/usuarios.js` y se vuelve a lanzar. El PIN real de oficina está en los secretos `PIN_ANTONIO` y `PIN_YULISSA`: para cambiarlo se edita el secreto y se vuelve a lanzar.
 - `automatico/` — carga automática desde el correo (Node). `nucleo.mjs` tiene la lógica, `index.mjs` conecta Gmail (IMAP) y Firebase, `prueba-local.mjs` la prueba con PDF locales.
 - `.github/workflows/carga-correo.yml` — ejecuta la carga automática cada 10 minutos.
+- `automatico/lector-albaranes.gs` — script de Google (en pruebas) que guarda en Drive las fotos de los albaranes que se envían desde la app. Se instala aparte en script.google.com; los pasos están al principio del archivo.
 
 ## Carga automática: cómo funciona
 
