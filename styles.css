@@ -346,3 +346,29 @@ small.tag-extra{display:block;padding:0;background:none;font-weight:700}
 .rev-of{display:flex;justify-content:flex-end;margin-top:-4px}
 .cli .sepb[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
 
+
+/* Escanear albarán (en pruebas, solo «dev»). Todo con prefijo alb-. */
+.sec-f:has(.alb-btn){flex-wrap:wrap}
+.alb-btn{flex:1 1 100%;min-height:42px;padding:0 14px;border-radius:999px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-weight:600;font-size:.9rem;white-space:nowrap}
+body.alb-abierto{overflow:hidden}
+.alb-modal{position:fixed;inset:0;z-index:60;background:rgba(10,16,22,.55);display:flex;align-items:flex-end;justify-content:center}
+.alb-panel{background:var(--surface);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.alb-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.alb-h h2{margin:0;font-family:var(--f-label);font-size:1.3rem}
+.alb-x{border:0;background:transparent;font-size:1.2rem;min-width:40px;min-height:40px;color:var(--muted)}
+.alb-prueba{margin:2px 0 10px;font-size:.8rem;color:var(--warn)}
+.alb-sub{margin:12px 0 6px;font-family:var(--f-label);font-size:1.05rem}
+.alb-hint{margin:0 0 8px}
+.alb-lista{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.alb-lista li{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:.9rem}
+.alb-links a{margin-left:8px;color:var(--accent);font-weight:600}
+.alb-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-bottom:10px}
+.alb-foto{position:relative;margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.alb-foto img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover}
+.alb-foto figcaption{font-size:.75rem;padding:2px 6px;color:var(--muted)}
+.alb-foto button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff}
+.alb-vacio{margin:0 0 10px}
+.alb-add{cursor:pointer}
+.alb-add.alb-off{opacity:.5;pointer-events:none}
+.alb-err{margin:10px 0 0;color:var(--bad);font-weight:600}
+.alb-acc{margin-top:14px}

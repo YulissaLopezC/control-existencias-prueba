@@ -1,7 +1,7 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=27';
+} from './fb.js?v=28'; // OJO: albaran.js importa esta misma versión
 import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar, keyOf } from './parser.js?v=12';
 import { USUARIOS_DEMO } from './demo/usuarios.js?v=3';
 
@@ -49,6 +49,17 @@ const nombreDe = uid => (usuarios[uid] || {}).nombre || 'otro chófer';
 const colorDe = uid => (usuarios[uid] || {}).color || 'var(--muted)';
 const chipChof = (uid, txt) => uid ? `<span class="chof${esUrgente(uid) ? ' urgente' : ''}" style="--c:${esc(colorDe(uid))}"><i></i>${esc(txt || nombreDe(uid))}</span>` : `<span class="chof sin"><i></i>${esc(txt || 'Sin asignar')}</span>`;
 const firma = () => ({ nombre: yo ? yo.nombre : '', uid: yo ? yo.uid : null, ts: ahora() });
+// Escáner de albaranes (EN PRUEBAS): albaran.js solo se descarga para quien tiene la marca «dev»,
+// así a los demás no les afecta aunque tuviera un fallo. Puede usarlo oficina o el chófer del almacén.
+let alb = null, albCargando = false;
+function cargarAlbaran() {
+  if (alb || albCargando) return; albCargando = true;
+  import('./albaran.js?v=1').then(m => {
+    m.initAlbaran({ getFecha: () => fecha, firma, toast: t => toast(t), puede: g => esOficina() || chofAlm(g) === (yo && yo.uid) });
+    alb = m; buildRecogida();
+  }).catch(e => { console.error('albaran.js', e); albCargando = false; });
+}
+const btnAlbaran = g => { if (!esDev()) return ''; if (!alb) { cargarAlbaran(); return ''; } return alb.botonAlbaran(g); };
 function errGuardar(e) { console.error(e); toast(e && e.code === 'permission-denied' ? 'Sin permiso para guardar' : 'No se guardó. Revisa la conexión'); }
 function errConexion(e) { console.error(e); toast('No se pudo conectar con la base de datos'); }
 
@@ -248,7 +259,7 @@ function buildRecogida() {
     <section class="sec${abiertos1.has(gr.g) ? '' : ' closed'}" data-g="${esc(gr.g)}">
       <div class="sec-h"><button class="tog" type="button" aria-expanded="${abiertos1.has(gr.g)}"><span class="tt"><span class="name">Proveedor ${esc(gr.g)} <span class="alm-chof"></span></span><span class="cnt"></span></span><span class="car">▾</span></button></div>
       <div class="items">${gr.items.map(itemHTML).join('')}</div>
-      <div class="sec-f"><button class="allok" type="button" data-allok="${esc(gr.g)}">Marcar todo «Tengo»</button><button class="sig" type="button" data-sig="${esc(gr.g)}">Siguiente →</button></div>
+      <div class="sec-f">${btnAlbaran(gr.g)}<button class="allok" type="button" data-allok="${esc(gr.g)}">Marcar todo «Tengo»</button><button class="sig" type="button" data-sig="${esc(gr.g)}">Siguiente →</button></div>
     </section>`).join('');
   refreshRecogida();
 }
