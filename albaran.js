@@ -2,7 +2,8 @@
 // Paso C: hacer las fotos del albarán (una por página), guardarlas en Drive con el
 // script de Google (automatico/lector-albaranes.gs) y dejar el registro en
 // dias/{fecha}/albaranes/{id}. No toca la recogida ni nada más del día.
-// La lectura con IA y la comparación con la lista vendrán en los pasos siguientes.
+// «Leer y comprobar»: el script lee las fotos con IA y relaciona cada línea con la lista del
+// almacén; la cuenta final (✓ / ⚠ / ✗ / ?) la hace comparar() aquí, no la IA.
 import { db, auth, doc, collection, setDoc, onSnapshot, MODO } from './fb.js?v=28';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVvZly3YpUWv5W-vFE8PZT1y0Pf2zZhLpNcDmPLLlMcg0gnNpzDDE_ln-dB0tuGQA/exec';
@@ -10,10 +11,12 @@ const LADO_MAX = 1600;   // píxeles del lado largo de cada foto
 const CALIDAD = 0.72;    // calidad JPEG (≈ 200–400 KB por foto)
 const MAX_FOTOS = 10;
 
-let ctx = null;               // lo que pasa app.js: getFecha, firma, toast, puede(g)
+let ctx = null;               // lo que pasa app.js: getFecha, firma, toast, puede(g), listaDe(g)
 let albs = {}, subFecha = null, unsub = null;
 let abierto = null;           // { g, fotos: [{ blob, url }] }
 let enviando = false;
+let leyendo = null;           // id del albarán que se está leyendo
+const abiertos = new Set();   // albaranes con el detalle desplegado
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hora = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
@@ -74,7 +77,11 @@ function caja() {
     if (e.target === el || e.target.closest('[data-alb-cerrar]')) { cerrar(); return; }
     const q = e.target.closest('[data-alb-quitar]');
     if (q) { quitar(Number(q.dataset.albQuitar)); return; }
-    if (e.target.closest('[data-alb-guardar]')) guardar();
+    if (e.target.closest('[data-alb-guardar]')) { guardar(); return; }
+    const l = e.target.closest('[data-alb-leer]');
+    if (l) { leer(l.dataset.albLeer); return; }
+    const v = e.target.closest('[data-alb-ver]');
+    if (v) { const id = v.dataset.albVer; abiertos.has(id) ? abiertos.delete(id) : abiertos.add(id); pintar(); }
   });
   el.addEventListener('change', e => {
     const inp = e.target.closest('input[type=file]'); if (!inp) return;
@@ -91,7 +98,7 @@ function abrir(g) {
   pintar();
 }
 function cerrar() {
-  if (enviando) return;
+  if (enviando || leyendo) return;
   const el = document.getElementById('alb-modal'); if (el) el.hidden = true;
   document.body.classList.remove('alb-abierto');
   // Las fotos sin guardar se mantienen por si se vuelve a abrir el mismo almacén.
@@ -103,7 +110,7 @@ function pintar() {
   el.querySelector('#alb-tit').textContent = `Albarán · Proveedor ${g}`;
   const hechos = delAlmacen(g);
   el.querySelector('.alb-hechos').innerHTML = hechos.length
-    ? `<h3 class="alb-sub">Guardados hoy</h3><ul class="alb-lista">${hechos.map(([, a]) => `<li><span>${esc(hora(a.ts))} · ${esc(a.nombre)} · ${a.fotos.length} foto${a.fotos.length === 1 ? '' : 's'}</span><span class="alb-links">${a.fotos.map((f, i) => `<a href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">Ver ${i + 1}</a>`).join(' ')}</span></li>`).join('')}</ul>`
+    ? `<h3 class="alb-sub">Guardados hoy</h3><ul class="alb-lista">${hechos.map(([id, a]) => fichaAlbaran(id, a, hechos)).join('')}</ul>`
     : '';
   const fs = abierto.fotos;
   el.querySelector('.alb-fotos').innerHTML = fs.length
@@ -114,6 +121,91 @@ function pintar() {
   gb.textContent = enviando ? 'Guardando…' : fs.length ? `Guardar albarán (${fs.length} foto${fs.length === 1 ? '' : 's'})` : 'Guardar albarán';
   el.querySelectorAll('.alb-add').forEach(l => l.classList.toggle('alb-off', enviando || fs.length >= MAX_FOTOS));
 }
+const ESTADOS = { correcto: ['✓', 'Correcto en códigos y cantidades', 'alb-ok'], diferencias: ['⚠', 'Con diferencias', 'alb-dif'], pendiente: ['?', 'Pendiente de revisar', 'alb-rev'] };
+const ICONO = { ok: ['✓', 'alb-ok'], diferencia: ['⚠', 'alb-dif'], falta: ['✗', 'alb-dif'], sobra: ['＋', 'alb-dif'], revisar: ['?', 'alb-rev'] };
+const nf = n => n == null || n === '' || isNaN(n) ? '—' : String(+Number(n).toFixed(3)).replace('.', ',');
+const eur = n => n == null ? 'no figura' : Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+
+function fichaAlbaran(id, a, hechos) {
+  const fotos = `<span class="alb-links">${a.fotos.map((f, i) => `<a href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">Ver ${i + 1}</a>`).join(' ')}</span>`;
+  const cab = `<div class="alb-fila"><span>${esc(hora(a.ts))} · ${esc(a.nombre)} · ${a.fotos.length} foto${a.fotos.length === 1 ? '' : 's'}</span>${fotos}</div>`;
+  if (!a.comparacion) {
+    const yo = leyendo === id;
+    return `<li>${cab}<button type="button" class="btn sm alb-leer" data-alb-leer="${esc(id)}" ${leyendo ? 'disabled' : ''}>${yo ? 'Leyendo… (puede tardar 1 minuto)' : '🔎 Leer y comprobar'}</button></li>`;
+  }
+  const L = a.lectura || {}, C = a.comparacion, [ic, tx, cl] = ESTADOS[C.estado] || ESTADOS.pendiente;
+  const dup = L.numero && hechos.find(([id2, b]) => id2 !== id && b.lectura && b.lectura.numero && String(b.lectura.numero).trim() === String(L.numero).trim());
+  const abierto = abiertos.has(id);
+  return `<li>${cab}
+    <div class="alb-res ${cl}"><b>${ic} ${tx}</b> <small>${C.ok} bien · ${C.dif} con diferencias · ${C.rev} por revisar</small></div>
+    <div class="alb-datos">Nº <b>${esc(L.numero || '—')}</b> · ${esc(L.fecha_doc || 'sin fecha')} · Importe ${esc(eur(L.importe_total))}${L.emisor ? ` · ${esc(L.emisor)}` : ''}${L.facturado_a_nombre_de ? ` (factura ${esc(L.facturado_a_nombre_de)})` : ''}</div>
+    ${dup ? `<p class="alb-aviso">⚠ Este número de albarán ya se escaneó a las ${esc(hora(dup[1].ts))}.</p>` : ''}
+    ${C.avisos && C.avisos.length ? C.avisos.map(t => `<p class="alb-aviso">⚠ ${esc(t)}</p>`).join('') : ''}
+    <button type="button" class="alb-ver" data-alb-ver="${esc(id)}">${abierto ? 'Ocultar comparación ▲' : 'Ver comparación ▼'}</button>
+    ${abierto ? tablaComparacion(C) : ''}
+    <p class="small alb-ia">Leído con ${esc(a.modelo || 'IA')}. Las faltas pueden venir en otro albarán del mismo almacén.</p></li>`;
+}
+function tablaComparacion(C) {
+  return `<table class="alb-tabla"><thead><tr><th></th><th>Artículo</th><th>Pedido</th><th>Albarán</th></tr></thead><tbody>${C.lineas.map(x => {
+    const [ic, cl] = ICONO[x.estado] || ICONO.revisar;
+    return `<tr class="${cl}"><td>${ic}</td><td><span class="alb-c">${esc(x.c || x.codigoAlb || '—')}</span> ${esc(x.d || '')}${x.nota ? `<small>${esc(x.nota)}</small>` : ''}</td><td>${nf(x.pedido)}</td><td>${nf(x.albaran)}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+// Cuenta final: lista del almacén frente a lo que leyó la IA. Solo códigos y cantidades.
+export function comparar(lectura, lista) {
+  const items = new Map(lista.map(p => [String(p.c), { c: String(p.c), d: p.d, pedido: Number(p.q) || 0, albaran: 0, n: 0, dudosa: false, sinCant: false, notas: [] }]));
+  const sobran = [], avisos = [];
+  for (const l of lectura.lineas || []) {
+    const it = l.codigo_lista != null ? items.get(String(l.codigo_lista)) : null;
+    if (!it) { sobran.push({ estado: l.confianza === 'baja' ? 'revisar' : 'sobra', codigoAlb: l.codigo, d: l.descripcion, pedido: null, albaran: l.cantidad_lista ?? l.unidades ?? l.piezas, nota: 'No está en la lista de este almacén' + (l.nota ? ' · ' + l.nota : '') }); continue; }
+    it.n++;
+    if (l.cantidad_lista == null || isNaN(l.cantidad_lista)) it.dudosa = it.sinCant = true; else it.albaran += Number(l.cantidad_lista);
+    if (l.confianza === 'baja') it.dudosa = true;
+    if (l.relacion === 'descripcion') it.notas.push(`relacionado por descripción («${l.descripcion}»)`);
+    if (l.nota) it.notas.push(l.nota);
+  }
+  const lineas = [...items.values()].map(it => ({
+    c: it.c, d: it.d, pedido: it.pedido, albaran: it.n && !it.sinCant ? it.albaran : null,
+    estado: !it.n ? 'falta' : it.dudosa ? 'revisar' : Math.abs(it.albaran - it.pedido) < 0.001 ? 'ok' : 'diferencia',
+    nota: it.notas.join(' · ') || null,
+  })).concat(sobran);
+  // Control con los totales del pie (si figuran y todo va en unidades).
+  const tp = lectura.totales_pie || {}, uds = (lectura.lineas || []).map(l => l.unidades);
+  if (tp.unidades != null && uds.length && uds.every(u => u != null)) {
+    const suma = uds.reduce((s, u) => s + Number(u), 0);
+    if (Math.abs(suma - tp.unidades) > 0.001) avisos.push(`La suma de las líneas (${nf(suma)} uds) no cuadra con el total del pie (${nf(tp.unidades)} uds): revisa la lectura.`);
+  }
+  const cuenta = e => lineas.filter(x => x.estado === e).length;
+  const ok = cuenta('ok'), rev = cuenta('revisar'), dif = lineas.length - ok - rev;
+  return { lineas, avisos, ok, dif, rev, estado: rev || avisos.length ? 'pendiente' : dif ? 'diferencias' : 'correcto' };
+}
+
+async function leer(id) {
+  if (leyendo || enviando) return;
+  const a = albs[id], fecha = ctx.getFecha();
+  if (!a || !fecha) return;
+  if (MODO !== 'real') { error('Leer con IA solo funciona en la app real (no en modo prueba ni en local).'); return; }
+  const user = auth.currentUser; if (!user) { error('Tienes que entrar con tu usuario.'); return; }
+  const lista = ctx.listaDe(a.g);
+  leyendo = id; error(''); pintar();
+  try {
+    const token = await user.getIdToken();
+    const r = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ token, accion: 'leer', fecha, g: a.g, fotos: a.fotos.map(f => f.id), lista }) });
+    const res = await r.json().catch(() => ({ ok: false, error: 'Respuesta no válida del script de Google.' }));
+    if (!res.ok) throw new Error(res.error || 'No se pudo leer el albarán.');
+    const comparacion = comparar(res.lectura, lista);
+    await setDoc(doc(db, 'dias', fecha, 'albaranes', id), { lectura: res.lectura, modelo: res.modelo || null, comparacion, estado: comparacion.estado, leido: ctx.firma() }, { merge: true });
+    abiertos.add(id);
+    ctx.toast('Albarán leído');
+  } catch (e) {
+    console.error(e);
+    error(e && e.code === 'permission-denied'
+      ? 'Se leyó, pero falta publicar las reglas nuevas de Firebase para guardar el resultado.'
+      : (e && e.message && !/Failed to fetch|NetworkError|Load failed/i.test(e.message) ? e.message : 'No se pudo enviar. Revisa la conexión.'));
+  } finally { leyendo = null; pintar(); }
+}
+
 function error(t) { const p = caja().querySelector('.alb-err'); p.hidden = !t; p.textContent = t || ''; }
 
 async function añadir(files) {

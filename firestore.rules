@@ -59,13 +59,18 @@ service cloud.firestore {
 
       // Albaranes escaneados (EN PRUEBAS): fotos guardadas en Drive y quién las subió.
       // Lo ven todos los que entran. Lo crea oficina (cualquier almacén) o el chófer que tiene
-      // ese almacén ese día, siempre a su nombre y solo en un día que exista. No se cambia ni se borra.
+      // ese almacén ese día, siempre a su nombre y solo en un día que exista. No se borra; solo se le añade
+      // el resultado de la lectura.
       match /albaranes/{id} {
         allow read: if conSesion();
         allow create: if conSesion()
           && exists(/databases/$(database)/documents/dias/$(fecha))
           && request.resource.data.uid == request.auth.uid
           && (esOficina() || esSuAlmacen(fecha, request.resource.data.g));
+        // Guardar el resultado de «Leer y comprobar»: quien lo subió u oficina, y solo esos campos.
+        allow update: if conSesion()
+          && (resource.data.uid == request.auth.uid || esOficina())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lectura', 'modelo', 'comparacion', 'estado', 'leido']);
       }
 
       // Pedidos enviados a proveedores (quién y a qué hora).

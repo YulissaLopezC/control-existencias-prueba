@@ -5,7 +5,10 @@
  *   CARPETA / AAAA-MM-DD / almacén / almacén_AAAA-MM-DD_HHMMSS_p1.jpg
  * Antes de guardar comprueba que quien envía ha entrado en la app (sesión de Firebase),
  * para que nadie de fuera pueda subir archivos.
- * Por ahora SOLO guarda las fotos. La lectura con IA se añadirá aquí más adelante.
+ * También LEE el albarán con IA (EN PRUEBAS, con Gemini): recibe la lista de ese almacén,
+ * lee las fotos ya guardadas y devuelve las líneas relacionadas con la lista. La cuenta final
+ * (correcto / diferencias / revisar) la hace la app, no la IA.
+ * Toda la llamada a la IA está en leerConIA_(): para cambiar de IA solo se cambia esa función.
  *
  * Es un script aparte: no tiene nada que ver con vigilante-google.gs.
  *
@@ -15,6 +18,8 @@
  *   2. Borrar lo que haya y pegar este archivo entero. Guardar.
  *   3. Configuración del proyecto (rueda) → Propiedades de la secuencia de comandos → Añadir:
  *        CARPETA_ID = el ID de la carpeta de Drive (lo que va después de /folders/ en su enlace)
+        GEMINI_API_KEY = la clave de Gemini (aistudio.google.com → Get API key). Nunca en el repo.
+        GEMINI_MODELO = (opcional) el modelo de Gemini; si no se pone, gemini-flash-latest
  *   4. Elegir la función probarCarpeta → Ejecutar. Aceptar los permisos que pide Google.
  *      En «Registro de ejecución» debe salir «Carpeta OK: …».
  *   5. Implementar → Nueva implementación → tipo «Aplicación web»:
@@ -43,8 +48,11 @@ function doGet() {
 
 /**
  * La app envía (como texto, para evitar problemas de CORS):
- *   { token, fecha: 'AAAA-MM-DD', g: 'CA', paginas: ['<jpeg en base64>', ...] }
- * Responde: { ok: true, archivos: [{ id, nombre }] }  o  { ok: false, error: 'texto' }
+ *  Guardar fotos: { token, fecha: 'AAAA-MM-DD', g: 'CA', paginas: ['<jpeg en base64>', ...] }
+ *     → { ok: true, archivos: [{ id, nombre }] }
+ *  Leer con IA:   { token, accion: 'leer', fecha, g, fotos: ['<id de Drive>', ...], lista: [{ c, d, q, um }] }
+ *     → { ok: true, lectura: {...}, modelo }
+ *  Si algo falla: { ok: false, error: 'texto' }
  */
 function doPost(e) {
   try {
@@ -57,6 +65,7 @@ function doPost(e) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json_({ ok: false, error: 'Fecha no válida.' });
     const g = String(p.g || '').replace(/[^A-Za-z0-9 _.\-]/g, '').trim().slice(0, 40);
     if (!g) return json_({ ok: false, error: 'Almacén no válido.' });
+    if (p.accion === 'leer') return json_(leer_(p, fecha, g));
     const paginas = Array.isArray(p.paginas) ? p.paginas : [];
     if (!paginas.length) return json_({ ok: false, error: 'No llegó ninguna foto.' });
     if (paginas.length > MAX_PAGINAS) return json_({ ok: false, error: `Máximo ${MAX_PAGINAS} fotos por albarán.` });
@@ -85,6 +94,103 @@ function doPost(e) {
 function probarCarpeta() {
   const raiz = DriveApp.getFolderById(carpetaId_());
   console.log('Carpeta OK: ' + raiz.getName());
+}
+
+/* ---------- lectura con IA ---------- */
+
+// Lee las fotos (ya guardadas en Drive) de un albarán y las relaciona con la lista del almacén.
+function leer_(p, fecha, g) {
+  const ids = Array.isArray(p.fotos) ? p.fotos.slice(0, MAX_PAGINAS) : [];
+  if (!ids.length) return { ok: false, error: 'No hay fotos que leer.' };
+  const lista = (Array.isArray(p.lista) ? p.lista : []).slice(0, 400).map(x => ({
+    c: String(x.c || '').slice(0, 40), d: String(x.d || '').slice(0, 120), q: Number(x.q) || 0, um: String(x.um || 'UNIDAD').slice(0, 10),
+  }));
+  // Solo se leen fotos de la carpeta de ese día y almacén.
+  const carpeta = carpetaDe_(fecha, g);
+  const imagenes = ids.map(id => {
+    const f = DriveApp.getFileById(String(id));
+    let dentro = false; const ps = f.getParents(); while (ps.hasNext()) if (ps.next().getId() === carpeta.getId()) dentro = true;
+    if (!dentro) throw new Error('Una de las fotos no es de este almacén y día.');
+    return { mime: f.getMimeType(), b64: Utilities.base64Encode(f.getBlob().getBytes()), nombre: f.getName() };
+  });
+  const r = leerConIA_(imagenes, lista);
+  // Se guarda lo que respondió la IA junto a las fotos, para poder revisarlo o comparar IAs.
+  try {
+    const base = imagenes[0].nombre.replace(/_p1\.jpg$/i, '');
+    carpeta.createFile(Utilities.newBlob(JSON.stringify(r, null, 1), 'application/json', `${base}_lectura_${r.modelo}.json`));
+  } catch (e) { console.error(e); }
+  return { ok: true, lectura: r.lectura, modelo: r.modelo };
+}
+
+const INSTRUCCIONES = `Eres un asistente que lee albaranes de proveedores (España, Canarias) para un almacén de distribución.
+Recibes las fotos de UN albarán (una por página) y la LISTA de artículos que había que recoger en ese proveedor.
+Devuelve SOLO un JSON con esta forma:
+{
+ "numero": "nº de albarán o null", "fecha_doc": "AAAA-MM-DD o null", "emisor": "empresa que emite el documento o null",
+ "facturado_a_nombre_de": "si el documento dice que factura otra empresa (p. ej. Unilever, Borges), su nombre; si no, null",
+ "importe_total": número o null (null si no figura; 0 solo si pone 0,00),
+ "totales_pie": { "unidades": número o null, "cajas": número o null, "kilos": número o null, "bultos": número o null },
+ "lineas": [ {
+   "codigo": "código tal cual aparece (texto, conserva ceros a la izquierda)", "descripcion": "texto",
+   "cajas": número o null, "unidades": número o null, "piezas": número o null, "kilos": número o null,
+   "precio": número o null,
+   "codigo_lista": "el código EXACTO de la LISTA al que corresponde, o null si no corresponde a ninguno",
+   "relacion": "codigo" | "sin_prefijo" | "descripcion" | null,
+   "cantidad_lista": número o null,
+   "confianza": "alta" | "media" | "baja",
+   "nota": "texto corto o null"
+ } ]
+}
+Reglas:
+- Una línea por ARTÍCULO. Las líneas de lote, caducidad o el desglose de un mismo artículo en varios lotes NO son artículos nuevos: suma sus cantidades en una sola línea.
+- Números con punto decimal (7,990 en el papel → 7.99). No inventes nada: si no se lee, pon null y confianza "baja".
+- Relación con la LISTA: primero código igual; si no, el código de la lista puede llevar delante un prefijo de letras (CEN, UN…) y ceros a la izquierda: compara sin ellos ("sin_prefijo"); si no, por descripción, solo si es claramente el mismo producto ("descripcion", y como mucho confianza "media").
+- cantidad_lista: la cantidad de esa línea expresada en la MISMA unidad que la lista. um "UNIDAD" = unidades sueltas (si el albarán da cajas y unidades por caja, conviértelo). um "EK" = piezas (no kilos): usa las piezas del albarán (en algunos van en la línea del lote, p. ej. "2,000 Unidades"); si el albarán solo trae kilos, pon null y explica en nota.
+- Si un dato no es seguro, confianza "baja".`;
+
+// ÚNICO sitio que habla con la IA. Devuelve { lectura, modelo }.
+function leerConIA_(imagenes, lista) {
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('Falta la propiedad GEMINI_API_KEY en la configuración del script.');
+  const modelo = (props.getProperty('GEMINI_MODELO') || 'gemini-flash-latest').trim();
+  const partes = [{ text: INSTRUCCIONES + '\n\nLISTA (JSON):\n' + JSON.stringify(lista) }]
+    .concat(imagenes.map((im, i) => [{ text: `Página ${i + 1}:` }, { inline_data: { mime_type: im.mime || 'image/jpeg', data: im.b64 } }]).flat());
+  const r = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { 'x-goog-api-key': key },
+    payload: JSON.stringify({ contents: [{ role: 'user', parts: partes }], generationConfig: { responseMimeType: 'application/json' } }),
+  });
+  const code = r.getResponseCode(), txt = r.getContentText();
+  if (code !== 200) {
+    console.error(code, txt.slice(0, 2000));
+    if (code === 429) throw new Error('La IA ha llegado a su límite de uso. Prueba en unos minutos.');
+    if (code === 400 || code === 403) throw new Error('La IA rechazó la petición (¿clave GEMINI_API_KEY correcta?).');
+    if (code === 404) throw new Error('No existe el modelo de IA configurado (GEMINI_MODELO).');
+    throw new Error('La IA no respondió (código ' + code + ').');
+  }
+  const res = JSON.parse(txt);
+  const cand = (res.candidates || [])[0];
+  const texto = cand && cand.content && (cand.content.parts || []).map(x => x.text || '').join('');
+  if (!texto) throw new Error('La IA no devolvió datos.');
+  let lectura;
+  try { lectura = JSON.parse(texto.replace(/^```(?:json)?\s*|\s*```\s*$/g, '')); }
+  catch (e) { console.error(texto.slice(0, 2000)); throw new Error('La IA devolvió algo que no se pudo leer.'); }
+  if (!lectura || !Array.isArray(lectura.lineas)) throw new Error('La IA no devolvió las líneas del albarán.');
+  return { lectura, modelo: res.modelVersion || modelo };
+}
+
+/** Ejecutar a mano desde el editor para comprobar la clave y el modelo de la IA (sin fotos). */
+function probarIA() {
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('Falta GEMINI_API_KEY.');
+  const modelo = (props.getProperty('GEMINI_MODELO') || 'gemini-flash-latest').trim();
+  const r = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-goog-api-key': key },
+    payload: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Responde solo: OK' }] }] }),
+  });
+  console.log(r.getResponseCode() === 200 ? 'IA OK (' + modelo + '): ' + r.getContentText().slice(0, 300) : 'ERROR ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 500));
 }
 
 /* ---------- interno ---------- */
