@@ -20,6 +20,7 @@
  *        CARPETA_ID = el ID de la carpeta de Drive (lo que va después de /folders/ en su enlace)
         GEMINI_API_KEY = la clave de Gemini (aistudio.google.com → Get API key). Nunca en el repo.
         GEMINI_MODELO = (opcional) el modelo de Gemini; si no se pone, gemini-flash-latest
+        GEMINI_PENSAR = (opcional) cuánto «piensa» Gemini: minimal, low, medium o high; por defecto low
  *   4. Elegir la función probarCarpeta → Ejecutar. Aceptar los permisos que pide Google.
  *      En «Registro de ejecución» debe salir «Carpeta OK: …».
  *   5. Implementar → Nueva implementación → tipo «Aplicación web»:
@@ -37,6 +38,7 @@
 
 // Clave pública del proyecto Firebase (la misma de firebase-config.js; no es secreta).
 const FIREBASE_API_KEY = 'AIzaSyDHL0jepTCOBG3MgkEgb7H4A1OIsr-nLR0';
+const FIREBASE_PROYECTO = 'control-existencias';
 const ZONA = 'Atlantic/Canary';      // la app trabaja con la hora de Canarias
 const MAX_PAGINAS = 10;
 const MAX_BYTES_PAGINA = 8 * 1024 * 1024;
@@ -50,8 +52,10 @@ function doGet() {
  * La app envía (como texto, para evitar problemas de CORS):
  *  Guardar fotos: { token, fecha: 'AAAA-MM-DD', g: 'CA', paginas: ['<jpeg en base64>', ...] }
  *     → { ok: true, archivos: [{ id, nombre }] }
- *  Leer con IA:   { token, accion: 'leer', fecha, g, fotos: ['<id de Drive>', ...], lista: [{ c, d, q, um }] }
+ *  Leer con IA:   { token, accion: 'leer', id, fecha, g, fotos: ['<id de Drive>', ...], lista: [{ c, d, q, um }] }
  *     → { ok: true, lectura: {...}, modelo }
+ *     Además guarda la lectura en el registro del albarán (dias/{fecha}/albaranes/{id}) con la
+ *     sesión del usuario, así se guarda aunque el móvil deje de esperar la respuesta.
  *  Si algo falla: { ok: false, error: 'texto' }
  */
 function doPost(e) {
@@ -113,13 +117,38 @@ function leer_(p, fecha, g) {
     if (!dentro) throw new Error('Una de las fotos no es de este almacén y día.');
     return { mime: f.getMimeType(), b64: Utilities.base64Encode(f.getBlob().getBytes()), nombre: f.getName() };
   });
-  const r = leerConIA_(imagenes, lista);
+  const r = leerConIA_(imagenes, lista, fecha);
   // Se guarda lo que respondió la IA junto a las fotos, para poder revisarlo o comparar IAs.
   try {
     const base = imagenes[0].nombre.replace(/_p1\.jpg$/i, '');
     carpeta.createFile(Utilities.newBlob(JSON.stringify(r, null, 1), 'application/json', `${base}_lectura_${r.modelo}.json`));
   } catch (e) { console.error(e); }
+  // Guardar en el registro del albarán con la sesión del usuario (las reglas de Firebase deciden).
+  const id = String(p.id || '');
+  if (/^[A-Za-z0-9_-]{1,80}$/.test(id)) {
+    try { guardarEnFirestore_(p.token, ['dias', fecha, 'albaranes', id], { lectura: r.lectura, modelo: r.modelo }); }
+    catch (e) { console.error('Firestore', e); }
+  }
   return { ok: true, lectura: r.lectura, modelo: r.modelo };
+}
+
+// Escribe campos en un documento de Firestore (API REST) con el token de sesión del usuario.
+function guardarEnFirestore_(token, ruta, campos) {
+  const mask = Object.keys(campos).map(k => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROYECTO}/databases/(default)/documents/${ruta.map(encodeURIComponent).join('/')}?${mask}&currentDocument.exists=true`;
+  const fields = {}; Object.keys(campos).forEach(k => fields[k] = valorFS_(campos[k]));
+  const r = UrlFetchApp.fetch(url, { method: 'patch', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + token }, payload: JSON.stringify({ fields }) });
+  if (r.getResponseCode() !== 200) throw new Error('Firestore ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 500));
+}
+function valorFS_(v) {
+  if (v === null || v === undefined) return { nullValue: null };
+  if (typeof v === 'boolean') return { booleanValue: v };
+  if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (typeof v === 'string') return { stringValue: v };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(x => Array.isArray(x) ? { stringValue: JSON.stringify(x) } : valorFS_(x)) } };
+  const fields = {}; Object.keys(v).forEach(k => fields[k] = valorFS_(v[k]));
+  return { mapValue: { fields } };
 }
 
 const INSTRUCCIONES = `Eres un asistente que lee albaranes de proveedores (España, Canarias) para un almacén de distribución.
@@ -149,18 +178,23 @@ Reglas:
 - Si un dato no es seguro, confianza "baja".`;
 
 // ÚNICO sitio que habla con la IA. Devuelve { lectura, modelo }.
-function leerConIA_(imagenes, lista) {
+function leerConIA_(imagenes, lista, fecha) {
   const props = PropertiesService.getScriptProperties();
   const key = props.getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('Falta la propiedad GEMINI_API_KEY en la configuración del script.');
   const modelo = (props.getProperty('GEMINI_MODELO') || 'gemini-flash-latest').trim();
-  const partes = [{ text: INSTRUCCIONES + '\n\nLISTA (JSON):\n' + JSON.stringify(lista) }]
+  const pensar = (props.getProperty('GEMINI_PENSAR') || 'low').trim();
+  const contexto = `\n\nEl albarán es de una recogida del ${fecha || 'día de hoy'}. La fecha del documento suele ser ese día o unos días antes: si el año no se lee claro, no lo cambies, pon la fecha que leas y confianza en nota.`;
+  const partes = [{ text: INSTRUCCIONES + contexto + '\n\nLISTA (JSON):\n' + JSON.stringify(lista) }]
     .concat(imagenes.map((im, i) => [{ text: `Página ${i + 1}:` }, { inline_data: { mime_type: im.mime || 'image/jpeg', data: im.b64 } }]).flat());
-  const r = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+  const llamar = conPensar => UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: { 'x-goog-api-key': key },
-    payload: JSON.stringify({ contents: [{ role: 'user', parts: partes }], generationConfig: { responseMimeType: 'application/json' } }),
+    payload: JSON.stringify({ contents: [{ role: 'user', parts: partes }], generationConfig: Object.assign({ responseMimeType: 'application/json' }, conPensar ? { thinkingConfig: { thinkingLevel: pensar } } : {}) }),
   });
+  let r = llamar(true);
+  // Si el modelo no admite el ajuste de «pensar», se repite sin él.
+  if (r.getResponseCode() === 400 && /thinking/i.test(r.getContentText())) r = llamar(false);
   const code = r.getResponseCode(), txt = r.getContentText();
   if (code !== 200) {
     console.error(code, txt.slice(0, 2000));

@@ -44,6 +44,7 @@ function suscribir(fecha) {
   if (!fecha) return;
   unsub = onSnapshot(collection(db, 'dias', fecha, 'albaranes'), snap => {
     albs = {}; snap.forEach(x => albs[x.id] = x.data());
+    completarPendientes(fecha);
     document.querySelectorAll('[data-alb]').forEach(b => b.textContent = '📷 Albarán' + etiqueta(b.dataset.alb));
     if (abierto) pintar();
   }, e => console.error('albaranes', e));
@@ -130,8 +131,8 @@ function fichaAlbaran(id, a, hechos) {
   const fotos = `<span class="alb-links">${a.fotos.map((f, i) => `<a href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">Ver ${i + 1}</a>`).join(' ')}</span>`;
   const cab = `<div class="alb-fila"><span>${esc(hora(a.ts))} · ${esc(a.nombre)} · ${a.fotos.length} foto${a.fotos.length === 1 ? '' : 's'}</span>${fotos}</div>`;
   if (!a.comparacion) {
-    const yo = leyendo === id;
-    return `<li>${cab}<button type="button" class="btn sm alb-leer" data-alb-leer="${esc(id)}" ${leyendo ? 'disabled' : ''}>${yo ? 'Leyendo… (puede tardar 1 minuto)' : '🔎 Leer y comprobar'}</button></li>`;
+    if (leyendo === id || enCurso(a)) return `<li>${cab}<p class="alb-leyendo">⏳ Leyendo con IA… Puedes cerrar esta ventana: el resultado aparecerá aquí solo.</p></li>`;
+    return `<li>${cab}<button type="button" class="btn sm alb-leer" data-alb-leer="${esc(id)}" ${leyendo ? 'disabled' : ''}>🔎 Leer y comprobar</button></li>`;
   }
   const L = a.lectura || {}, C = a.comparacion, [ic, tx, cl] = ESTADOS[C.estado] || ESTADOS.pendiente;
   const dup = L.numero && hechos.find(([id2, b]) => id2 !== id && b.lectura && b.lectura.numero && String(b.lectura.numero).trim() === String(L.numero).trim());
@@ -150,6 +151,23 @@ function tablaComparacion(C) {
     const [ic, cl] = ICONO[x.estado] || ICONO.revisar;
     return `<tr class="${cl}"><td>${ic}</td><td><span class="alb-c">${esc(x.c || x.codigoAlb || '—')}</span> ${esc(x.d || '')}${x.nota ? `<small>${esc(x.nota)}</small>` : ''}</td><td>${nf(x.pedido)}</td><td>${nf(x.albaran)}</td></tr>`;
   }).join('')}</tbody></table>`;
+}
+
+// «Leyendo» dura como mucho 7 minutos (lo máximo que puede trabajar el script); después se puede reintentar.
+const enCurso = a => a.estado === 'leyendo' && !a.lectura && a.leido && Date.now() - Date.parse(a.leido.ts) < 7 * 60 * 1000;
+
+// Cuando la lectura llega (la guarda el script), la app hace la comparación y la guarda.
+const completando = new Set();
+function completarPendientes(fecha) {
+  for (const [id, a] of Object.entries(albs)) {
+    if (!a.lectura || a.comparacion || completando.has(id)) continue;
+    if (!ctx || !ctx.puede(a.g)) continue;
+    completando.add(id);
+    const comparacion = comparar(a.lectura, ctx.listaDe(a.g));
+    setDoc(doc(db, 'dias', fecha, 'albaranes', id), { comparacion, estado: comparacion.estado }, { merge: true })
+      .then(() => { abiertos.add(id); if (abierto) pintar(); })
+      .catch(e => { console.error(e); completando.delete(id); });
+  }
 }
 
 // Cuenta final: lista del almacén frente a lo que leyó la IA. Solo códigos y cantidades.
@@ -189,20 +207,27 @@ async function leer(id) {
   const user = auth.currentUser; if (!user) { error('Tienes que entrar con tu usuario.'); return; }
   const lista = ctx.listaDe(a.g);
   leyendo = id; error(''); pintar();
+  let enviado = false;
   try {
-    const token = await user.getIdToken();
-    const r = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ token, accion: 'leer', fecha, g: a.g, fotos: a.fotos.map(f => f.id), lista }) });
+    const token = await user.getIdToken(true);
+    await setDoc(doc(db, 'dias', fecha, 'albaranes', id), { estado: 'leyendo', leido: ctx.firma() }, { merge: true });
+    enviado = true;
+    const r = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ token, accion: 'leer', id, fecha, g: a.g, fotos: a.fotos.map(f => f.id), lista }) });
     const res = await r.json().catch(() => ({ ok: false, error: 'Respuesta no válida del script de Google.' }));
     if (!res.ok) throw new Error(res.error || 'No se pudo leer el albarán.');
-    const comparacion = comparar(res.lectura, lista);
-    await setDoc(doc(db, 'dias', fecha, 'albaranes', id), { lectura: res.lectura, modelo: res.modelo || null, comparacion, estado: comparacion.estado, leido: ctx.firma() }, { merge: true });
-    abiertos.add(id);
+    // Normalmente el script ya la guardó; si no pudo, se guarda desde aquí.
+    if (!(albs[id] && albs[id].lectura)) await setDoc(doc(db, 'dias', fecha, 'albaranes', id), { lectura: res.lectura, modelo: res.modelo || null }, { merge: true });
     ctx.toast('Albarán leído');
   } catch (e) {
     console.error(e);
-    error(e && e.code === 'permission-denied'
-      ? 'Se leyó, pero falta publicar las reglas nuevas de Firebase para guardar el resultado.'
-      : (e && e.message && !/Failed to fetch|NetworkError|Load failed/i.test(e.message) ? e.message : 'No se pudo enviar. Revisa la conexión.'));
+    const red = !e || !e.message || /Failed to fetch|NetworkError|Load failed|network/i.test(e.message);
+    if (enviado && red) ctx.toast('Sigue leyendo; el resultado aparecerá solo');
+    else {
+      if (enviado) setDoc(doc(db, 'dias', fecha, 'albaranes', id), { estado: 'error-lectura' }, { merge: true }).catch(() => {});
+      error(e && e.code === 'permission-denied'
+        ? 'Falta publicar las reglas nuevas de Firebase.'
+        : (e && e.message && !red ? e.message : 'No se pudo enviar. Revisa la conexión.'));
+    }
   } finally { leyendo = null; pintar(); }
 }
 
