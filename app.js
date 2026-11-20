@@ -54,7 +54,7 @@ const firma = () => ({ nombre: yo ? yo.nombre : '', uid: yo ? yo.uid : null, ts:
 let alb = null, albCargando = false;
 function cargarAlbaran() {
   if (alb || albCargando) return; albCargando = true;
-  import('./albaran.js?v=4').then(m => {
+  import('./albaran.js?v=5').then(m => {
     m.initAlbaran({ getFecha: () => fecha, firma, toast: t => toast(t), puede: g => esOficina() || chofAlm(g) === (yo && yo.uid),
       listaDe: g => (dia ? dia.productos : []).filter(p => p.g === g).map(p => ({ c: p.c, d: p.d, q: p.q, um: isEK(p) ? 'EK' : (p.um || 'UNIDAD') })) });
     alb = m; buildRecogida();

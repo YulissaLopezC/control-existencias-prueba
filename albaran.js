@@ -20,6 +20,9 @@ const abiertos = new Set();   // albaranes con el detalle desplegado
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hora = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+// Sesión caducada: pasa, por ejemplo, después de lanzar «Crear usuarios» (cambia las contraseñas).
+const SESION = /auth\/(user-token-expired|invalid-user-token|user-disabled|requires-recent-login)/;
+const msgSesion = 'Tu sesión ha caducado. Sal de la app («Salir») y vuelve a entrar.';
 const delAlmacen = g => Object.entries(albs).filter(([, a]) => a.g === g).sort((a, b) => String(a[1].ts).localeCompare(String(b[1].ts)));
 
 export function initAlbaran(c) {
@@ -220,6 +223,7 @@ async function leer(id) {
     ctx.toast('Albarán leído');
   } catch (e) {
     console.error(e);
+    if (e && SESION.test(e.code || '')) { error(msgSesion); return; }
     const red = !e || !e.message || /Failed to fetch|NetworkError|Load failed|network/i.test(e.message);
     if (enviado && red) ctx.toast('Sigue leyendo; el resultado aparecerá solo');
     else {
@@ -277,7 +281,7 @@ async function guardar() {
     ctx.toast('Albarán guardado');
   } catch (e) {
     console.error(e);
-    error(e && e.code === 'permission-denied'
+    error(e && SESION.test(e.code || '') ? msgSesion : e && e.code === 'permission-denied'
       ? 'Las fotos están en Drive, pero falta publicar las reglas nuevas de Firebase para guardar el registro.'
       : (e && e.message && !/Failed to fetch|NetworkError|Load failed/i.test(e.message) ? e.message : 'No se pudo enviar. Revisa la conexión.'));
   } finally {
