@@ -298,8 +298,9 @@ function refreshItem(pr) {
   if (document.activeElement !== ni) ni.value = m.nota || '';
   const who = el.querySelector('.who');
   if (s && m.nombre) { who.hidden = false; who.textContent = 'Marcado por ' + m.nombre + (m.ts ? ' · ' + new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''); } else who.hidden = true;
-  const q = busq[1].toLowerCase();
-  const okQ = !q || pr.c.toLowerCase().includes(q) || pr.d.toLowerCase().includes(q);
+  // Busca por código, nombre o almacén (siglas del proveedor: «rb» encuentra todo RB). Sin tildes ni mayúsculas.
+  const q = sinTildes(busq[1]);
+  const okQ = !q || sinTildes(pr.c).includes(q) || sinTildes(pr.d).includes(q) || sinTildes(pr.g).startsWith(q);
   const f = filtro[1];
   const okF = f === 'todos' || (f === 'pend' && !s) || (f === 'falt' && isIssue1(pr));
   el.hidden = !(okQ && okF);
