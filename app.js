@@ -1,9 +1,9 @@
 import {
   DEMO, MODO, db, auth, doc, collection, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction,
   onAuthStateChanged, signInWithEmailAndPassword, signOut, borrarDatosDemo,
-} from './fb.js?v=28'; // OJO: albaran.js importa esta misma versión
+} from './fb.js?v=29'; // OJO: albaran.js importa esta misma versión
 import { pdfLines, tipoDePdf, parseProveedores, parseDiario, cruzar, keyOf } from './parser.js?v=12';
-import { USUARIOS_DEMO } from './demo/usuarios.js?v=3';
+import { USUARIOS_DEMO } from './demo/usuarios.js?v=4';
 
 /* ================= utilidades ================= */
 const $ = s => document.querySelector(s);
@@ -54,7 +54,7 @@ const firma = () => ({ nombre: yo ? yo.nombre : '', uid: yo ? yo.uid : null, ts:
 let alb = null, albCargando = false;
 function cargarAlbaran() {
   if (alb || albCargando) return; albCargando = true;
-  import('./albaran.js?v=3').then(m => {
+  import('./albaran.js?v=4').then(m => {
     m.initAlbaran({ getFecha: () => fecha, firma, toast: t => toast(t), puede: g => esOficina() || chofAlm(g) === (yo && yo.uid),
       listaDe: g => (dia ? dia.productos : []).filter(p => p.g === g).map(p => ({ c: p.c, d: p.d, q: p.q, um: isEK(p) ? 'EK' : (p.um || 'UNIDAD') })) });
     alb = m; buildRecogida();

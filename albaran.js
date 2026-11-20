@@ -4,7 +4,7 @@
 // dias/{fecha}/albaranes/{id}. No toca la recogida ni nada más del día.
 // «Leer y comprobar»: el script lee las fotos con IA y relaciona cada línea con la lista del
 // almacén; la cuenta final (✓ / ⚠ / ✗ / ?) la hace comparar() aquí, no la IA.
-import { db, auth, doc, collection, setDoc, onSnapshot, MODO } from './fb.js?v=28';
+import { db, auth, doc, collection, setDoc, onSnapshot, MODO } from './fb.js?v=29';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVvZly3YpUWv5W-vFE8PZT1y0Pf2zZhLpNcDmPLLlMcg0gnNpzDDE_ln-dB0tuGQA/exec';
 const LADO_MAX = 1600;   // píxeles del lado largo de cada foto
@@ -58,7 +58,7 @@ function caja() {
   el.id = 'alb-modal'; el.className = 'alb-modal'; el.hidden = true;
   el.innerHTML = `<div class="alb-panel" role="dialog" aria-modal="true" aria-labelledby="alb-tit">
     <div class="alb-h"><h2 id="alb-tit"></h2><button type="button" class="alb-x" data-alb-cerrar aria-label="Cerrar">✕</button></div>
-    <p class="alb-prueba">En pruebas · solo lo ves tú</p>
+    <p class="alb-prueba">En pruebas · solo lo ven los usuarios de prueba</p>
     <div class="alb-hechos"></div>
     <h3 class="alb-sub">Albarán nuevo</h3>
     <p class="hint alb-hint">Haz una foto por página, con el albarán entero y bien de luz.</p>
