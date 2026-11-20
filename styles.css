@@ -393,3 +393,4 @@ body.alb-abierto{overflow:hidden}
 .alb-tabla tr.alb-rev td:first-child{color:var(--warn)}
 .alb-c{font-family:var(--f-mono);font-size:.78rem;color:var(--muted)}
 .alb-ia{margin:6px 0 0}
+.alb-leyendo{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--chk-bg);color:var(--chk-fg);font-weight:600;font-size:.9rem}
