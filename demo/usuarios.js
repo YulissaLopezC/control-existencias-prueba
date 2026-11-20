@@ -9,8 +9,9 @@ export const USUARIOS_DEMO = [
   { uid: 'u-alexis', nombre: 'Alexis', rol: 'chofer', color: '#c2650f', pin: '444444' },
   // Cupo de reserva: lo usa quien reemplace a un chófer que no esté disponible ese día.
   { uid: 'u-extra', nombre: 'Extra (reserva)', rol: 'chofer', color: '#6a7480', pin: '777777' },
-  { uid: 'u-antonio', nombre: 'Don Antonio', rol: 'oficina', color: '#5a4fb0', pin: '555555' },
+  { uid: 'u-antonio', nombre: 'Don Antonio', rol: 'oficina', color: '#5a4fb0', pin: '555555', dev: true },
   // dev: ve antes que nadie las funciones nuevas en pruebas (sigue siendo oficina en todo lo demás).
+  // Don Antonio también, para probar el escáner de albaranes (19/11).
   { uid: 'u-yulissa', nombre: 'Yulissa', rol: 'oficina', color: '#0f8a8a', pin: '666666', dev: true },
   // No es una persona: es donde se deja un pedido que un chófer no puede entregar, para que otro lo tome.
   // No tiene PIN ni aparece en «¿Quién eres?» (ver sinLogin).
