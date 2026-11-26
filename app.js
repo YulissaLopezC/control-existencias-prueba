@@ -1294,10 +1294,10 @@ const textoPedido = P => `Para: ${P.para.join(', ') || '—'}\nCC: ${P.cc.join('
 // Pestaña «Envíos» (chóferes): solo los almacenes que tiene asignados hoy.
 function renderEnvios() {
   const box = $('#envios'), tab = $('#t-envios'); if (!box) return;
-  if (!esChofer()) { box.innerHTML = ''; tab.textContent = 'Envíos'; return; }
+  if (!esChofer()) { box.innerHTML = ''; tab.querySelector('.tl').textContent = 'Envíos'; return; }
   const mios = misAlmacenes();
   const pend = mios.filter(g => (correosProv.alm[g] || []).length && (!envios[g] || extrasDespues(g, envios[g].ts))).length;
-  tab.textContent = pend ? `Envíos · ${pend}` : 'Envíos';
+  tab.querySelector('.tl').textContent = pend ? `Envíos · ${pend}` : 'Envíos';
   if (errProv) { box.innerHTML = '<p class="small">No se pudieron leer los correos de los proveedores. Avisa a oficina.</p>'; return; }
   if (!dia) { box.innerHTML = '<div class="empty"><p>Cuando se cargue el día aparecerán aquí los pedidos de tus almacenes.</p></div>'; return; }
   if (!mios.length) { box.innerHTML = '<div class="empty"><p>Hoy no tienes almacenes asignados. Oficina los asigna en «Almacenes del día».</p></div>'; return; }

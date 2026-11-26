@@ -394,3 +394,23 @@ body.alb-abierto{overflow:hidden}
 .alb-c{font-family:var(--f-mono);font-size:.78rem;color:var(--muted)}
 .alb-ia{margin:6px 0 0}
 .alb-leyendo{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--chk-bg);color:var(--chk-fg);font-weight:600;font-size:.9rem}
+
+/* ---------- Menú: botones redondeados de colores, con icono ---------- */
+/* Cada sección tiene su color: --tf (fuerte) y --tb (fondo suave). El botón seleccionado se rellena con el color fuerte y letra blanca. */
+#t-recogida{--tf:#1d4e89;--tb:#e3edf8}
+#t-clientes{--tf:#1f7a4d;--tb:#e2f3ea}
+#t-reparto{--tf:#8a5a00;--tb:#fbf0d6}
+#t-traspasos{--tf:#5b3ea8;--tb:#efe9fb}
+#t-resumen{--tf:#1f6fb2;--tb:#e6f1fb}
+#t-envios{--tf:#0f6e6e;--tb:#dff3f2}
+#t-oficina{--tf:#a3324e;--tb:#fbe7ec}
+nav.tabs{--tc:#ffffff;gap:8px;padding:8px 3px 10px}
+nav.tabs a{display:flex;align-items:center;justify-content:center;gap:7px;padding:8px 14px;border:1.5px solid transparent;border-radius:999px;background:var(--tb);color:var(--tf);transition:transform .1s,background-color .15s}
+nav.tabs a svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs a[aria-current="page"]{background:var(--tf);color:var(--tc);border-color:var(--tf);transform:scale(1.03)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  #t-recogida{--tf:#7fb0ec}#t-clientes{--tf:#6fcf9b}#t-reparto{--tf:#f0c060}#t-traspasos{--tf:#b9a2f0}#t-resumen{--tf:#85b7eb}#t-envios{--tf:#6ccfcf}#t-oficina{--tf:#f0899f}
+  nav.tabs{--tc:#0b1824}nav.tabs a{--tb:color-mix(in srgb,var(--tf) 16%,transparent)}}}
+:root[data-theme="dark"] #t-recogida{--tf:#7fb0ec}:root[data-theme="dark"] #t-clientes{--tf:#6fcf9b}:root[data-theme="dark"] #t-reparto{--tf:#f0c060}:root[data-theme="dark"] #t-traspasos{--tf:#b9a2f0}:root[data-theme="dark"] #t-resumen{--tf:#85b7eb}:root[data-theme="dark"] #t-envios{--tf:#6ccfcf}:root[data-theme="dark"] #t-oficina{--tf:#f0899f}
+:root[data-theme="dark"] nav.tabs{--tc:#0b1824}:root[data-theme="dark"] nav.tabs a{--tb:color-mix(in srgb,var(--tf) 16%,transparent)}
+@media (max-width:560px){nav.tabs{gap:6px}nav.tabs a{padding:7px 4px;gap:4px}nav.tabs a svg{width:16px;height:16px}}
