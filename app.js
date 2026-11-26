@@ -1266,8 +1266,14 @@ function suscribirPedidos() {
 function pedidoDe(g) {
   const gr = grupos().find(x => x.g === g); if (!gr) return null;
   const asunto = `Antonio Viña – Pedido – ${g}`;
-  const lineas = gr.items.map(pr => `• ${pr.c}  ${pr.d} — ${fmtQ(pr.q)} ${isEK(pr) ? 'EK' : (pr.um || 'UNIDAD')}${pr.extra ? ` (${txtExtra(pr.q, pr.extra)})` : ''}`);
-  const cuerpo = `Buenos días,\n\nEste es nuestro pedido para el día ${fmtF(fecha)} (almacén ${g}):\n\n${lineas.join('\n')}\n\nTotal: ${gr.items.length} producto${gr.items.length === 1 ? '' : 's'}.\n\nGracias.\nDistribuciones Antonio Viña`;
+  // Un bloque por producto: «código · cantidad», la descripción debajo y una raya entre productos.
+  const unid = pr => { const u = isEK(pr) ? 'EK' : (pr.um || 'UNIDAD'); return ['UNIDAD', 'UD', 'UDS'].includes(u) ? 'UD' : u; };
+  const txtU = (u, q) => u === 'UD' ? (q === 1 ? 'ud.' : 'uds.') : u === 'CAJA' ? (q === 1 ? 'caja' : 'cajas') : u === 'KG' ? 'kg' : u;
+  const RAYA = '────────────────────';
+  const lineas = gr.items.map(pr => `${pr.c}  ·  ${fmtQ(pr.q)} ${txtU(unid(pr), pr.q)}${pr.extra ? ` (${txtExtra(pr.q, pr.extra)})` : ''}\n${pr.d}`);
+  const sumas = new Map(); gr.items.forEach(pr => sumas.set(unid(pr), (sumas.get(unid(pr)) || 0) + pr.q));
+  const totalU = [...sumas].map(([u, q]) => `${fmtQ(+q.toFixed(3))} ${txtU(u, q)}`).join(' · ');
+  const cuerpo = `Buenos días,\n\nEste es nuestro pedido para el día ${fmtF(fecha)} (almacén ${g}):\n\n${RAYA}\n${lineas.join(`\n${RAYA}\n`)}\n${RAYA}\n\nTotal: ${gr.items.length} producto${gr.items.length === 1 ? '' : 's'} · ${totalU}\n\nGracias.\nDistribuciones Antonio Viña`;
   const para = correosProv.alm[g] || [], cc = correosProv.reparto || [];
   const url = `mailto:${para.map(encodeURIComponent).join(',')}?${cc.length ? 'cc=' + cc.map(encodeURIComponent).join(',') + '&' : ''}subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
   return { asunto, cuerpo, para, cc, url, n: gr.items.length };
