@@ -74,10 +74,26 @@ function vista() {
   if (v === 'envios' && !esChofer()) v = esOficina() ? 'oficina' : 'recogida'; // oficina envía desde Oficina → Pedidos a proveedores
   return VISTAS.includes(v) && v !== 'login' ? v : 'recogida';
 }
+// Menú: flechas para desplazar cuando no caben todos los botones, y el seleccionado siempre a la vista.
+function flechasTabs() {
+  const n = $('#tabs'), x = n.scrollLeft;
+  $('#tabs-izq').hidden = n.hidden || x <= 4;
+  $('#tabs-der').hidden = n.hidden || x + n.clientWidth >= n.scrollWidth - 4;
+}
+function verTabActiva() {
+  const n = $('#tabs'), a = n.querySelector('a[aria-current="page"]');
+  if (!n.hidden && a && (a.offsetLeft < n.scrollLeft || a.offsetLeft + a.offsetWidth > n.scrollLeft + n.clientWidth)) n.scrollTo({ left: a.offsetLeft - (n.clientWidth - a.offsetWidth) / 2, behavior: 'smooth' });
+  flechasTabs();
+}
+$('#tabs').addEventListener('scroll', flechasTabs, { passive: true });
+if ('ResizeObserver' in window) new ResizeObserver(flechasTabs).observe($('#tabs')); else addEventListener('resize', flechasTabs);
+$('#tabs-izq').addEventListener('click', () => $('#tabs').scrollBy({ left: -$('#tabs').clientWidth * 0.7, behavior: 'smooth' }));
+$('#tabs-der').addEventListener('click', () => $('#tabs').scrollBy({ left: $('#tabs').clientWidth * 0.7, behavior: 'smooth' }));
 function route() {
   const v = vista();
   VISTAS.forEach(n => { $('#v-' + n).hidden = n !== v; const t = $('#t-' + n); if (t) { if (n === v) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); } });
   $('#tabs').hidden = !yo; $('#t-oficina').hidden = !esOficina(); $('#t-envios').hidden = !esChofer();
+  verTabActiva();
   $('#bar').hidden = !(v === 'recogida' || v === 'reparto');
   if (v === 'resumen') renderResumen();
   if (v === 'traspasos') renderTraspasos();
