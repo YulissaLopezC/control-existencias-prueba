@@ -414,3 +414,19 @@ nav.tabs a[aria-current="page"]{background:var(--tf);color:var(--tc);border-colo
 :root[data-theme="dark"] #t-recogida{--tf:#7fb0ec}:root[data-theme="dark"] #t-clientes{--tf:#6fcf9b}:root[data-theme="dark"] #t-reparto{--tf:#f0c060}:root[data-theme="dark"] #t-traspasos{--tf:#b9a2f0}:root[data-theme="dark"] #t-resumen{--tf:#85b7eb}:root[data-theme="dark"] #t-envios{--tf:#6ccfcf}:root[data-theme="dark"] #t-oficina{--tf:#f0899f}
 :root[data-theme="dark"] nav.tabs{--tc:#0b1824}:root[data-theme="dark"] nav.tabs a{--tb:color-mix(in srgb,var(--tf) 16%,transparent)}
 @media (max-width:560px){nav.tabs{gap:6px}nav.tabs a{padding:7px 4px;gap:4px}nav.tabs a svg{width:16px;height:16px}}
+/* Flechas del menú: aparecen solo cuando hay botones escondidos a ese lado */
+.tabs-box{position:relative;min-width:0}
+.tabs-flecha{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:0 1px 6px rgba(0,0,0,.22);cursor:pointer}
+.tabs-flecha.izq{left:0}.tabs-flecha.der{right:0}
+.tabs-flecha svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.tabs-box:has(#tabs-izq:not([hidden])) nav.tabs{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 48px);mask-image:linear-gradient(to right,transparent 0,#000 48px)}
+.tabs-box:has(#tabs-der:not([hidden])) nav.tabs{-webkit-mask-image:linear-gradient(to left,transparent 0,#000 48px);mask-image:linear-gradient(to left,transparent 0,#000 48px)}
+.tabs-box:has(#tabs-izq:not([hidden])):has(#tabs-der:not([hidden])) nav.tabs{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 48px,#000 calc(100% - 48px),transparent 100%);mask-image:linear-gradient(to right,transparent 0,#000 48px,#000 calc(100% - 48px),transparent 100%)}
+/* Celular: los 3 botones por fila nunca pasan del ancho de la pantalla (evita el desplazamiento lateral de la página) */
+@media (max-width:560px){
+  nav.tabs{grid-template-columns:repeat(3,minmax(0,1fr));padding-inline:0}
+  nav.tabs a{min-width:0;padding:7px 4px;gap:4px;font-size:.8rem;letter-spacing:.01em}
+  nav.tabs a .tl{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  nav.tabs a[aria-current="page"]{transform:none}
+}
+@media (max-width:380px){nav.tabs a{gap:3px;font-size:.74rem}nav.tabs a svg{width:14px;height:14px}}
