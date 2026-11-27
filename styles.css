@@ -430,3 +430,9 @@ nav.tabs a[aria-current="page"]{background:var(--tf);color:var(--tc);border-colo
   nav.tabs a[aria-current="page"]{transform:none}
 }
 @media (max-width:380px){nav.tabs a{gap:3px;font-size:.74rem}nav.tabs a svg{width:14px;height:14px}}
+/* Refuerzo: nada de la cabecera puede ser más ancho que la pantalla del celular */
+header .wrap{grid-template-columns:minmax(0,1fr)}
+@media (max-width:560px){
+  nav.tabs a{overflow:hidden}
+  nav.tabs a .tl{display:block}
+}
