@@ -422,3 +422,11 @@ nav.tabs a[aria-current="page"]{background:var(--tf);color:var(--tc);border-colo
 .tabs-box:has(#tabs-izq:not([hidden])) nav.tabs{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 48px);mask-image:linear-gradient(to right,transparent 0,#000 48px)}
 .tabs-box:has(#tabs-der:not([hidden])) nav.tabs{-webkit-mask-image:linear-gradient(to left,transparent 0,#000 48px);mask-image:linear-gradient(to left,transparent 0,#000 48px)}
 .tabs-box:has(#tabs-izq:not([hidden])):has(#tabs-der:not([hidden])) nav.tabs{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 48px,#000 calc(100% - 48px),transparent 100%);mask-image:linear-gradient(to right,transparent 0,#000 48px,#000 calc(100% - 48px),transparent 100%)}
+/* Celular: los 3 botones por fila nunca pasan del ancho de la pantalla (evita el desplazamiento lateral de la página) */
+@media (max-width:560px){
+  nav.tabs{grid-template-columns:repeat(3,minmax(0,1fr));padding-inline:0}
+  nav.tabs a{min-width:0;padding:7px 4px;gap:4px;font-size:.8rem;letter-spacing:.01em}
+  nav.tabs a .tl{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  nav.tabs a[aria-current="page"]{transform:none}
+}
+@media (max-width:380px){nav.tabs a{gap:3px;font-size:.74rem}nav.tabs a svg{width:14px;height:14px}}
