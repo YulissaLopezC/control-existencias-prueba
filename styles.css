@@ -484,3 +484,18 @@ textarea.field.veh-nota{min-height:0;font-family:inherit;font-size:1rem}
 .veh-adm-lista small{display:block;color:var(--muted);font-size:.8rem}
 .veh-adm-acc{display:flex;gap:6px}
 .veh-mini{border:1px solid var(--line);background:var(--surface);color:var(--accent);border-radius:999px;padding:4px 10px;font-weight:600;font-size:.82rem;cursor:pointer}
+
+/* ---------- Visor de fotos dentro de la app (vehículos y albaranes) ---------- */
+body.visor-abierto{overflow:hidden}
+.visor{position:fixed;inset:0;z-index:80;background:rgba(8,12,16,.92);display:flex;flex-direction:column}
+.visor-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;color:#fff}
+.visor-t{font-weight:700;font-size:1rem}
+.visor-x{width:40px;height:40px;border:0;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:1rem;cursor:pointer}
+.visor-b{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:8px;-webkit-overflow-scrolling:touch}
+.visor-b img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;border-radius:6px}
+.visor-b img.zoom{max-width:none;max-height:none;width:220%;cursor:zoom-out;align-self:flex-start}
+.visor-msg{color:#fff;text-align:center;padding:20px}
+.visor-pie{margin:0;padding:8px 14px calc(10px + env(safe-area-inset-bottom,0px));color:rgba(255,255,255,.7);font-size:.82rem;text-align:center}
+.veh-ver,.alb-ver-foto{border:0;background:none;padding:0;color:var(--accent);font-weight:600;font-size:inherit;text-decoration:underline;cursor:pointer}
+.visor-b:has(img.zoom){justify-content:flex-start;align-items:flex-start}
+.alb-links .alb-ver-foto{margin-left:8px}

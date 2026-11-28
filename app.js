@@ -54,7 +54,7 @@ const firma = () => ({ nombre: yo ? yo.nombre : '', uid: yo ? yo.uid : null, ts:
 let alb = null, albCargando = false;
 function cargarAlbaran() {
   if (alb || albCargando) return; albCargando = true;
-  import('./albaran.js?v=6').then(m => {
+  import('./albaran.js?v=7').then(m => {
     m.initAlbaran({ getFecha: () => fecha, firma, toast: t => toast(t), puedeLeer: () => esDev(), puede: g => esOficina() || chofAlm(g) === (yo && yo.uid),
       listaDe: g => (dia ? dia.productos : []).filter(p => p.g === g).map(p => ({ c: p.c, d: p.d, q: p.q, um: isEK(p) ? 'EK' : (p.um || 'UNIDAD') })) });
     alb = m; buildRecogida();
@@ -66,7 +66,7 @@ let veh = null, vehCargando = null;
 function conVehiculos(fn) {
   if (!esOficina()) return;
   if (veh) { fn(veh); return; }
-  if (!vehCargando) vehCargando = import('./vehiculos.js?v=2').then(m => { m.initVehiculos({ firma, toast: t => toast(t), hoy }); veh = m; return m; })
+  if (!vehCargando) vehCargando = import('./vehiculos.js?v=3').then(m => { m.initVehiculos({ firma, toast: t => toast(t), hoy }); veh = m; return m; })
     .catch(e => { console.error('vehiculos.js', e); vehCargando = null; toast('No se pudo abrir Vehículos'); });
   vehCargando.then(m => m && fn(m));
 }

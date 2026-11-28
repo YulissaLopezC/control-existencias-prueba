@@ -8,6 +8,7 @@
 // Vehículos / {matrícula} · {modelo} / Repostaje (acción «vehiculo» del script).
 // Se manda también g por si el script aún no está actualizado (entonces va a la carpeta de albaranes).
 import { db, auth, doc, collection, setDoc, onSnapshot, MODO } from './fb.js?v=29';
+import './visor.js?v=1'; // «Ver foto» se abre dentro de la app
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVvZly3YpUWv5W-vFE8PZT1y0Pf2zZhLpNcDmPLLlMcg0gnNpzDDE_ln-dB0tuGQA/exec';
 const LADO_MAX = 1600, CALIDAD = 0.72;
@@ -110,7 +111,7 @@ function pRep(v) {
 }
 function pHist(v) {
   const filas = regs.map(r => {
-    const fotos = (r.fotos || []).map((f, i) => `<a href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">Ver foto${r.fotos.length > 1 ? ' ' + (i + 1) : ''}</a>`).join(' ');
+    const fotos = (r.fotos || []).map((f, i) => `<button type="button" class="veh-ver" data-foto="${esc(f.id)}" data-foto-tit="Ticket · ${esc(v.matricula)}">Ver foto${r.fotos.length > 1 ? ' ' + (i + 1) : ''}</button>`).join(' ');
     return `<li class="veh-reg"><span class="veh-ico rep">⛽</span><div><b>Repostaje · ${r.km ? fmtKm(r.km) + ' km' : 'sin km'}</b>
       <small>${esc(cuando(r.ts))} · ${esc(r.nombre || '')}${fotos ? ' · ' + fotos : ' · sin foto'}</small>${r.nota ? `<small class="veh-n">${esc(r.nota)}</small>` : ''}</div></li>`;
   }).join('');
