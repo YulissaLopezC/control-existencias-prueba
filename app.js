@@ -49,18 +49,19 @@ const nombreDe = uid => (usuarios[uid] || {}).nombre || 'otro chófer';
 const colorDe = uid => (usuarios[uid] || {}).color || 'var(--muted)';
 const chipChof = (uid, txt) => uid ? `<span class="chof${esUrgente(uid) ? ' urgente' : ''}" style="--c:${esc(colorDe(uid))}"><i></i>${esc(txt || nombreDe(uid))}</span>` : `<span class="chof sin"><i></i>${esc(txt || 'Sin asignar')}</span>`;
 const firma = () => ({ nombre: yo ? yo.nombre : '', uid: yo ? yo.uid : null, ts: ahora() });
-// Escáner de albaranes (EN PRUEBAS): albaran.js solo se descarga para quien tiene la marca «dev»,
-// así a los demás no les afecta aunque tuviera un fallo. Puede usarlo oficina o el chófer del almacén.
+// Fotos de albaranes: las hacen oficina (cualquier almacén) y cada chófer en sus almacenes del día;
+// se guardan en Drive. «Leer y comprobar» (IA) sigue EN PRUEBAS: solo lo ve quien tiene la marca «dev».
 let alb = null, albCargando = false;
 function cargarAlbaran() {
   if (alb || albCargando) return; albCargando = true;
-  import('./albaran.js?v=5').then(m => {
-    m.initAlbaran({ getFecha: () => fecha, firma, toast: t => toast(t), puede: g => esOficina() || chofAlm(g) === (yo && yo.uid),
+  import('./albaran.js?v=6').then(m => {
+    m.initAlbaran({ getFecha: () => fecha, firma, toast: t => toast(t), puedeLeer: () => esDev(), puede: g => esOficina() || chofAlm(g) === (yo && yo.uid),
       listaDe: g => (dia ? dia.productos : []).filter(p => p.g === g).map(p => ({ c: p.c, d: p.d, q: p.q, um: isEK(p) ? 'EK' : (p.um || 'UNIDAD') })) });
     alb = m; buildRecogida();
   }).catch(e => { console.error('albaran.js', e); albCargando = false; });
 }
-const btnAlbaran = g => { if (!esDev()) return ''; if (!alb) { cargarAlbaran(); return ''; } return alb.botonAlbaran(g); };
+const verAlbaran = g => esDev() || esOficina() || (esChofer() && chofAlm(g) === yo.uid);
+const btnAlbaran = g => { if (!verAlbaran(g)) return ''; if (!alb) { cargarAlbaran(); return ''; } return alb.botonAlbaran(g); };
 function errGuardar(e) { console.error(e); toast(e && e.code === 'permission-denied' ? 'Sin permiso para guardar' : 'No se guardó. Revisa la conexión'); }
 function errConexion(e) { console.error(e); toast('No se pudo conectar con la base de datos'); }
 
