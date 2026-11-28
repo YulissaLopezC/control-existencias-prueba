@@ -1,6 +1,7 @@
 // Vehículos (MAQUETA, fase 1: solo oficina).
-// - Pestaña «Vehículos»: buscar y elegir vehículo → Repostaje (foto del ticket + km + nota) → historial.
-//   Taller y Mantenimiento se ven pero aún no están hechos (fases 2 y 3).
+// - Pestaña «Vehículos»: buscar y elegir vehículo → Repostaje (foto del ticket + km + nota),
+//   Mantenimiento (km, documentación, foto de limpieza, incidencias con fotos) → historial.
+//   Taller se ve pero aún no está hecho (fase 3).
 // - Oficina → «Vehículos»: carga masiva pegando la lista y alta manual; los que no se usan se
 //   desactivan (no se borran) para conservar su historial.
 // Datos: vehiculos/{MATRICULA} y vehiculos/{MATRICULA}/registros/{id}.
@@ -18,6 +19,9 @@ let vehs = {}, unsubV = null, errV = false;
 let regs = [], unsubR = null, regDe = null;
 let pant = 'lista', sel = null, q = '';
 let rep = { foto: null, km: '', nota: '', error: '', enviando: false };
+const MAX_INC = 6;
+const manVacio = () => ({ km: '', doc: '', lim: null, inc: '', fotos: [], desc: '', error: '', enviando: false });
+let man = manVacio();
 let pegado = null;              // vista previa de la carga masiva
 let editando = null;            // matrícula que se está editando en Oficina
 let elVista = null, elAdmin = null;
@@ -63,7 +67,7 @@ function pintar() {
   if (errV) { el.innerHTML = '<div class="empty"><p>No se pudo leer la lista de vehículos. Revisa que estén publicadas las reglas de Firebase.</p></div>'; return; }
   const v = sel && vehs[sel];
   if (pant !== 'lista' && !v) pant = 'lista';
-  el.innerHTML = `<p class="veh-maq">Maqueta · solo la ve oficina</p>` + (pant === 'lista' ? pLista() : pant === 'veh' ? pVeh(v) : pant === 'rep' ? pRep(v) : pHist(v));
+  el.innerHTML = `<p class="veh-maq">Maqueta · solo la ve oficina</p>` + (pant === 'lista' ? pLista() : pant === 'veh' ? pVeh(v) : pant === 'rep' ? pRep(v) : pant === 'man' ? pMan(v) : pHist(v));
   if (pant === 'lista') pintarLista();
 }
 const atras = (a, t) => `<button type="button" class="veh-atras" data-veh-ir="${a}">‹ ${esc(t)}</button>`;
@@ -90,12 +94,12 @@ function pVeh(v) {
     <div class="veh-acc">
       <button type="button" class="veh-big rep" data-veh-ir="rep"><span class="veh-ico">⛽</span>Repostaje</button>
       <button type="button" class="veh-big tal" data-veh-pronto="Taller"><span class="veh-ico">🔧</span>Taller<small>Próximamente</small></button>
-      <button type="button" class="veh-big man" data-veh-pronto="Mantenimiento"><span class="veh-ico">⚙️</span>Mantenimiento<small>Próximamente</small></button>
+      <button type="button" class="veh-big man" data-veh-ir="man"><span class="veh-ico">⚙️</span>Mantenimiento</button>
     </div>
     <button type="button" class="veh-atras" data-veh-ir="hist">🕘 Ver historial${n ? ` (${n} registro${n === 1 ? '' : 's'})` : ''}</button>`;
 }
 function pRep(v) {
-  const ult = regs.find(r => r.tipo === 'repostaje' && r.km);
+  const ult = ultimoKm();
   const f = rep.foto;
   return `${atras('veh', v.modelo)}<h2 class="veh-tit">Repostaje</h2><p class="veh-sub">${esc(v.modelo)} · ${esc(v.matricula)}</p>
     <div class="card veh-form">
@@ -109,12 +113,52 @@ function pRep(v) {
       <button type="button" class="btn" data-veh-guardar ${rep.enviando ? 'disabled' : ''}>${rep.enviando ? 'Guardando…' : 'Guardar repostaje'}</button>
     </div>`;
 }
-function pHist(v) {
-  const filas = regs.map(r => {
-    const fotos = (r.fotos || []).map((f, i) => `<button type="button" class="veh-ver" data-foto="${esc(f.id)}" data-foto-tit="Ticket · ${esc(v.matricula)}">Ver foto${r.fotos.length > 1 ? ' ' + (i + 1) : ''}</button>`).join(' ');
-    return `<li class="veh-reg"><span class="veh-ico rep">⛽</span><div><b>Repostaje · ${r.km ? fmtKm(r.km) + ' km' : 'sin km'}</b>
+const ultimoKm = () => regs.find(r => r.km);
+const hintKm = () => { const u = ultimoKm(); return u ? `<p class="hint" style="margin:0">Último registrado: ${fmtKm(u.km)} km (${esc(cuando(u.ts))}).</p>` : ''; };
+const req = t => `<span class="veh-req">${t}</span>`;
+function pMan(v) {
+  const M = man, si = M.inc === 'Sí';
+  return `${atras('veh', v.modelo)}<h2 class="veh-tit">Mantenimiento</h2><p class="veh-sub">${esc(v.modelo)} · ${esc(v.matricula)}</p>
+    <div class="card veh-form">
+      <label><span class="veh-lb">Kilometraje ${req('Obligatorio')}</span><input class="field" id="veh-man-km" type="number" inputmode="numeric" min="0" step="1" value="${esc(M.km)}" placeholder="Ej. 184950"></label>
+      ${hintKm()}
+      <div class="veh-sep"></div>
+      <span class="veh-lb">Documentación del vehículo ${req('Obligatorio')}</span>
+      <div class="veh-seg"><button type="button" class="${M.doc === 'OK' ? 'on' : ''}" data-veh-man="doc" data-v="OK">OK</button><button type="button" class="${M.doc === 'Falta' ? 'on mal' : ''}" data-veh-man="doc" data-v="Falta">Falta</button></div>
+      <div class="veh-sep"></div>
+      <span class="veh-lb">Limpieza ${req('Foto obligatoria')}</span>
+      ${M.lim ? `<figure class="veh-foto"><img src="${M.lim.url}" alt="Foto de limpieza"><button type="button" data-veh-man-quitar="lim" aria-label="Quitar foto">✕</button></figure>`
+        : `<label class="veh-camara">📷 Foto de limpieza<input type="file" accept="image/*" capture="environment" id="veh-man-lim" hidden></label>`}
+      <div class="veh-sep"></div>
+      <span class="veh-lb">¿Hay incidencias?</span>
+      <div class="veh-seg"><button type="button" class="${M.inc === 'No' ? 'on' : ''}" data-veh-man="inc" data-v="No">No</button><button type="button" class="${si ? 'on mal' : ''}" data-veh-man="inc" data-v="Sí">Sí</button></div>
+      ${si ? `<span class="veh-lb">Fotos de las incidencias ${req('Al menos 1')}</span>
+        <div class="veh-miniaturas">${M.fotos.map((f, i) => `<figure><img src="${f.url}" alt="Incidencia ${i + 1}"><button type="button" data-veh-man-quitar="${i}" aria-label="Quitar foto ${i + 1}">✕</button></figure>`).join('')}
+        ${M.fotos.length < MAX_INC ? `<label class="veh-mas" aria-label="Añadir foto">＋<input type="file" accept="image/*" capture="environment" id="veh-man-inc" hidden></label>` : ''}</div>
+        <p class="hint" style="margin:0">Hasta ${MAX_INC} fotos, una por cada daño (golpe, luz rota…).</p>
+        <label><span class="veh-lb">Descripción de la incidencia ${req('Obligatorio')}</span><textarea class="field veh-nota" id="veh-man-desc" rows="3" maxlength="500">${esc(M.desc)}</textarea></label>` : ''}
+      ${MODO !== 'real' ? '<p class="hint" style="margin:0">Modo prueba: las fotos no se suben a Drive; solo se guarda el registro.</p>' : ''}
+      <p class="veh-err" ${M.error ? '' : 'hidden'}>${esc(M.error)}</p>
+      <button type="button" class="btn" data-veh-man-guardar ${M.enviando ? 'disabled' : ''}>${M.enviando ? 'Guardando…' : 'Guardar revisión'}</button>
+    </div>`;
+}
+const chip = (t, mal) => `<span class="veh-chip ${mal ? 'mal' : 'ok'}">${esc(t)}</span>`;
+const verFotoBtn = (f, txt, tit) => `<button type="button" class="veh-ver" data-foto="${esc(f.id)}" data-foto-tit="${esc(tit)}">${esc(txt)}</button>`;
+function filaHist(r, v) {
+  if (r.tipo === 'mantenimiento') {
+    const fs = r.fotos || [], lim = fs.filter(f => f.rol === 'limpieza'), inc = fs.filter(f => f.rol === 'incidencia');
+    const n = inc.length;
+    const links = [...lim.map(f => verFotoBtn(f, 'Limpieza', `Limpieza · ${v.matricula}`)), ...inc.map((f, i) => verFotoBtn(f, `Incidencia ${i + 1}`, `Incidencia ${i + 1} · ${v.matricula}`))].join(' · ');
+    return `<li class="veh-reg"><span class="veh-ico man">⚙️</span><div><b>Mantenimiento · ${r.km ? fmtKm(r.km) + ' km' : 'sin km'}</b>
+      <div class="veh-chips">${chip('Documentación ' + (r.doc || '—'), r.doc !== 'OK')}${r.incidencias ? chip(n ? `${n} incidencia${n === 1 ? '' : 's'}` : 'Con incidencias', true) : chip('Sin incidencias', false)}</div>
+      <small>${esc(cuando(r.ts))} · ${esc(r.nombre || '')}${links ? ' · ' + links : ' · sin fotos'}</small>${r.desc ? `<small class="veh-n">${esc(r.desc)}</small>` : ''}</div></li>`;
+  }
+  const fotos = (r.fotos || []).map((f, i) => verFotoBtn(f, `Ver foto${r.fotos.length > 1 ? ' ' + (i + 1) : ''}`, `Ticket · ${v.matricula}`)).join(' ');
+  return `<li class="veh-reg"><span class="veh-ico rep">⛽</span><div><b>Repostaje · ${r.km ? fmtKm(r.km) + ' km' : 'sin km'}</b>
       <small>${esc(cuando(r.ts))} · ${esc(r.nombre || '')}${fotos ? ' · ' + fotos : ' · sin foto'}</small>${r.nota ? `<small class="veh-n">${esc(r.nota)}</small>` : ''}</div></li>`;
-  }).join('');
+}
+function pHist(v) {
+  const filas = regs.map(r => filaHist(r, v)).join('');
   return `${atras('veh', v.modelo)}<h2 class="veh-tit">Historial</h2><p class="veh-sub">${esc(v.modelo)} · ${esc(v.matricula)}</p>
     ${filas ? `<ul class="card veh-hist">${filas}</ul>` : '<div class="empty"><p>Todavía no hay registros de este vehículo.</p></div>'}`;
 }
@@ -191,6 +235,46 @@ async function comprimir(file) {
 const aBase64 = blob => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = ko; r.readAsDataURL(blob); });
 function limpiarRep() { if (rep.foto) URL.revokeObjectURL(rep.foto.url); rep = { foto: null, km: '', nota: '', error: '', enviando: false }; }
 
+// Sube las fotos a Drive (Vehículos / matrícula · modelo / tipo) y devuelve [{ id, nombre }] en el mismo orden.
+async function subirFotos(v, tipo, blobs) {
+  const user = auth.currentUser; if (!user) throw new Error('Tienes que entrar con tu usuario.');
+  const token = await user.getIdToken();
+  const paginas = await Promise.all(blobs.map(aBase64));
+  const r = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ token, accion: 'vehiculo', fecha: ctx.hoy(), matricula: v.matricula, modelo: v.modelo, tipo, g: 'VEH ' + v.matricula, paginas }) });
+  const res = await r.json().catch(() => ({ ok: false, error: 'Respuesta no válida del script de Google.' }));
+  if (!res.ok) throw new Error(res.error || 'No se pudieron guardar las fotos en Drive.');
+  return res.archivos;
+}
+const msgError = e => e && SESION.test(e.code || '') ? 'Tu sesión ha caducado. Sal de la app («Salir») y vuelve a entrar.'
+  : e && e.code === 'permission-denied' ? 'Sin permiso para guardar: falta publicar las reglas de Firebase.'
+  : e && e.message && !/Failed to fetch|NetworkError|Load failed/i.test(e.message) ? e.message : 'No se pudo enviar. Revisa la conexión.';
+function limpiarMan() { if (man.lim) URL.revokeObjectURL(man.lim.url); man.fotos.forEach(f => URL.revokeObjectURL(f.url)); man = manVacio(); }
+
+async function guardarMan() {
+  const v = vehs[sel], M = man; if (!v || M.enviando) return;
+  const km = Number(M.km), real = MODO === 'real';
+  M.error = !M.km || !Number.isFinite(km) || km <= 0 ? 'Escribe el kilometraje.'
+    : !M.doc ? 'Marca si la documentación está OK o falta.'
+    : real && !M.lim ? 'Falta la foto de limpieza.'
+    : !M.inc ? 'Indica si hay incidencias.'
+    : M.inc === 'Sí' && real && !M.fotos.length ? 'Añade al menos una foto de la incidencia.'
+    : M.inc === 'Sí' && !M.desc.trim() ? 'Describe la incidencia.' : '';
+  if (M.error) { pintar(); return; }
+  M.enviando = true; pintar();
+  try {
+    const si = M.inc === 'Sí', incs = si ? M.fotos : [];
+    let fotos = [];
+    if (real) {
+      const subidas = await subirFotos(v, 'Mantenimiento', [M.lim.blob, ...incs.map(f => f.blob)]);
+      fotos = subidas.map((f, i) => ({ ...f, rol: i === 0 ? 'limpieza' : 'incidencia' }));
+    }
+    const f = ctx.firma();
+    await setDoc(doc(db, 'vehiculos', v.id, 'registros', `man__${Date.now()}`), { tipo: 'mantenimiento', km, doc: M.doc, incidencias: si, desc: si ? M.desc.trim() : '', fotos, fecha: ctx.hoy(), nombre: f.nombre, uid: f.uid, ts: f.ts });
+    limpiarMan(); pant = 'hist'; pintar(); ctx.toast('Revisión guardada');
+  } catch (e) { console.error(e); man.error = msgError(e); }
+  finally { man.enviando = false; pintar(); }
+}
+
 async function guardarRep() {
   const v = vehs[sel]; if (!v || rep.enviando) return;
   const km = Number(rep.km);
@@ -199,36 +283,28 @@ async function guardarRep() {
   rep.enviando = true; rep.error = ''; pintar();
   try {
     let fotos = [];
-    if (rep.foto && MODO === 'real') {
-      const user = auth.currentUser; if (!user) throw new Error('Tienes que entrar con tu usuario.');
-      const token = await user.getIdToken();
-      const r = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ token, accion: 'vehiculo', fecha: ctx.hoy(), matricula: v.matricula, modelo: v.modelo, tipo: 'Repostaje', g: 'VEH ' + v.matricula, paginas: [await aBase64(rep.foto.blob)] }) });
-      const res = await r.json().catch(() => ({ ok: false, error: 'Respuesta no válida del script de Google.' }));
-      if (!res.ok) throw new Error(res.error || 'No se pudo guardar la foto en Drive.');
-      fotos = res.archivos;
-    }
+    if (rep.foto && MODO === 'real') fotos = await subirFotos(v, 'Repostaje', [rep.foto.blob]);
     const f = ctx.firma();
     await setDoc(doc(db, 'vehiculos', v.id, 'registros', `rep__${Date.now()}`), { tipo: 'repostaje', km, nota: rep.nota.trim(), fotos, fecha: ctx.hoy(), nombre: f.nombre, uid: f.uid, ts: f.ts });
     limpiarRep(); pant = 'hist'; pintar(); ctx.toast('Repostaje guardado');
-  } catch (e) {
-    console.error(e);
-    rep.error = e && SESION.test(e.code || '') ? 'Tu sesión ha caducado. Sal de la app («Salir») y vuelve a entrar.'
-      : e && e.code === 'permission-denied' ? 'Sin permiso para guardar: falta publicar las reglas de Firebase.'
-      : e && e.message && !/Failed to fetch|NetworkError|Load failed/i.test(e.message) ? e.message : 'No se pudo enviar. Revisa la conexión.';
-  } finally { rep.enviando = false; pintar(); }
+  } catch (e) { console.error(e); rep.error = msgError(e); }
+  finally { rep.enviando = false; pintar(); }
 }
 
 /* ================= eventos ================= */
 function clic(e) {
-  const t = e.target.closest('[data-veh-sel],[data-veh-ir],[data-veh-pronto],[data-veh-borrar],[data-veh-quitar],[data-veh-guardar],[data-veh-revisar],[data-veh-cargar],[data-veh-cancelar],[data-veh-anadir],[data-veh-editar],[data-veh-ed-ok],[data-veh-ed-no],[data-veh-activo]');
+  const t = e.target.closest('[data-veh-sel],[data-veh-ir],[data-veh-pronto],[data-veh-borrar],[data-veh-quitar],[data-veh-guardar],[data-veh-revisar],[data-veh-cargar],[data-veh-cancelar],[data-veh-anadir],[data-veh-editar],[data-veh-ed-ok],[data-veh-ed-no],[data-veh-activo],[data-veh-man],[data-veh-man-quitar],[data-veh-man-guardar]');
   if (!t) return;
   const d = t.dataset;
   if (d.vehSel) { sel = d.vehSel; suscribirRegistros(sel); pant = 'veh'; pintar(); scrollTo(0, 0); return; }
-  if (d.vehIr) { if (d.vehIr === 'lista') { sel = null; suscribirRegistros(null); } if (pant === 'rep' && d.vehIr !== 'rep') limpiarRep(); pant = d.vehIr; pintar(); scrollTo(0, 0); return; }
+  if (d.vehIr) { if (d.vehIr === 'lista') { sel = null; suscribirRegistros(null); } if (pant === 'rep' && d.vehIr !== 'rep') limpiarRep(); if (pant === 'man' && d.vehIr !== 'man') limpiarMan(); pant = d.vehIr; pintar(); scrollTo(0, 0); return; }
   if (d.vehPronto) { ctx.toast(`${d.vehPronto}: próximamente`); return; }
   if ('vehBorrar' in d) { q = ''; const i = document.getElementById('veh-q'); if (i) { i.value = ''; i.focus(); } pintarLista(); return; }
   if ('vehQuitar' in d) { if (rep.foto) URL.revokeObjectURL(rep.foto.url); rep.foto = null; pintar(); return; }
   if ('vehGuardar' in d) { guardarRep(); return; }
+  if (d.vehMan) { man[d.vehMan] = d.v; man.error = ''; pintar(); return; }
+  if (d.vehManQuitar) { if (d.vehManQuitar === 'lim') { if (man.lim) URL.revokeObjectURL(man.lim.url); man.lim = null; } else { const f = man.fotos.splice(Number(d.vehManQuitar), 1)[0]; if (f) URL.revokeObjectURL(f.url); } pintar(); return; }
+  if ('vehManGuardar' in d) { guardarMan(); return; }
   if ('vehRevisar' in d) { revisarPegado(); return; }
   if ('vehCancelar' in d) { pegado = null; pintarAdmin(); return; }
   if ('vehCargar' in d) {
@@ -258,9 +334,24 @@ function escribir(e) {
   if (id === 'veh-q') { q = e.target.value; pintarLista(); }
   else if (id === 'veh-km') rep.km = e.target.value;
   else if (id === 'veh-nota') rep.nota = e.target.value;
+  else if (id === 'veh-man-km') man.km = e.target.value;
+  else if (id === 'veh-man-desc') man.desc = e.target.value;
 }
 async function cambiar(e) {
-  if (e.target.id !== 'veh-foto') return;
+  const id = e.target.id;
+  if (id === 'veh-man-lim' || id === 'veh-man-inc') {
+    const files = [...(e.target.files || [])]; if (!files.length) return;
+    try {
+      for (const file of files) {
+        if (id === 'veh-man-inc' && man.fotos.length >= MAX_INC) break;
+        const blob = await comprimir(file), foto = { blob, url: URL.createObjectURL(blob) };
+        if (id === 'veh-man-lim') man.lim = foto; else man.fotos.push(foto);
+      }
+      man.error = '';
+    } catch (err) { console.error(err); man.error = 'No se pudo leer la foto. Prueba otra vez.'; }
+    pintar(); return;
+  }
+  if (id !== 'veh-foto') return;
   const file = e.target.files && e.target.files[0]; if (!file) return;
   try { const blob = await comprimir(file); rep.foto = { blob, url: URL.createObjectURL(blob) }; rep.error = ''; }
   catch (err) { console.error(err); rep.error = 'No se pudo leer la foto. Prueba otra vez.'; }
