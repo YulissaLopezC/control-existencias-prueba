@@ -99,9 +99,8 @@ service cloud.firestore {
       allow write: if esOficina();
     }
 
-    // Historial de cargas automáticas: lo ve oficina en la pestaña «Cargar».
-    // Vehículos (MAQUETA, fase 1): por ahora solo oficina los ve y los gestiona.
-    // Los registros (repostajes…) se crean a nombre de quien los hace y no se modifican ni se borran.
+    // Vehículos (MAQUETA): por ahora solo oficina los ve y los gestiona.
+    // Los registros (repostajes, mantenimientos…) se crean a nombre de quien los hace y no se modifican ni se borran.
     match /vehiculos/{v} {
       allow read, write: if conSesion() && esOficina();
       match /registros/{id} {
@@ -110,6 +109,7 @@ service cloud.firestore {
       }
     }
 
+    // Historial de cargas automáticas: lo ve oficina en la pestaña «Cargar».
     match /registro/{id} {
       allow read: if esOficina();
     }
