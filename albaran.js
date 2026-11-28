@@ -1,4 +1,4 @@
-// Escanear albarán (EN PRUEBAS: solo lo ve quien tiene la marca «dev»).
+// Fotos de albaranes: oficina y el chófer de cada almacén. «Leer y comprobar» (IA), EN PRUEBAS: solo «dev».
 // Paso C: hacer las fotos del albarán (una por página), guardarlas en Drive con el
 // script de Google (automatico/lector-albaranes.gs) y dejar el registro en
 // dias/{fecha}/albaranes/{id}. No toca la recogida ni nada más del día.
@@ -33,7 +33,7 @@ export function initAlbaran(c) {
   });
 }
 
-// Botón para el pie de cada almacén de Recogida (app.js solo lo pone si esDev()).
+// Botón para el pie de cada almacén de Recogida (app.js lo pone para oficina, el chófer del almacén y «dev»).
 export function botonAlbaran(g) {
   suscribir(ctx && ctx.getFecha());
   return `<button class="alb-btn" type="button" data-alb="${esc(g)}">📷 Albarán${etiqueta(g)}</button>`;
@@ -61,7 +61,6 @@ function caja() {
   el.id = 'alb-modal'; el.className = 'alb-modal'; el.hidden = true;
   el.innerHTML = `<div class="alb-panel" role="dialog" aria-modal="true" aria-labelledby="alb-tit">
     <div class="alb-h"><h2 id="alb-tit"></h2><button type="button" class="alb-x" data-alb-cerrar aria-label="Cerrar">✕</button></div>
-    <p class="alb-prueba">En pruebas · solo lo ven los usuarios de prueba</p>
     <div class="alb-hechos"></div>
     <h3 class="alb-sub">Albarán nuevo</h3>
     <p class="hint alb-hint">Haz una foto por página, con el albarán entero y bien de luz.</p>
@@ -135,6 +134,7 @@ function fichaAlbaran(id, a, hechos) {
   const cab = `<div class="alb-fila"><span>${esc(hora(a.ts))} · ${esc(a.nombre)} · ${a.fotos.length} foto${a.fotos.length === 1 ? '' : 's'}</span>${fotos}</div>`;
   if (!a.comparacion) {
     if (leyendo === id || enCurso(a)) return `<li>${cab}<p class="alb-leyendo">⏳ Leyendo con IA… Puedes cerrar esta ventana: el resultado aparecerá aquí solo.</p></li>`;
+    if (!ctx.puedeLeer || !ctx.puedeLeer()) return `<li>${cab}</li>`;
     return `<li>${cab}<button type="button" class="btn sm alb-leer" data-alb-leer="${esc(id)}" ${leyendo ? 'disabled' : ''}>🔎 Leer y comprobar</button></li>`;
   }
   const L = a.lectura || {}, C = a.comparacion, [ic, tx, cl] = ESTADOS[C.estado] || ESTADOS.pendiente;
@@ -203,7 +203,7 @@ export function comparar(lectura, lista) {
 }
 
 async function leer(id) {
-  if (leyendo || enviando) return;
+  if (leyendo || enviando || !ctx.puedeLeer || !ctx.puedeLeer()) return;
   const a = albs[id], fecha = ctx.getFecha();
   if (!a || !fecha) return;
   if (MODO !== 'real') { error('Leer con IA solo funciona en la app real (no en modo prueba ni en local).'); return; }
