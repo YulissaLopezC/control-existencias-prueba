@@ -65,6 +65,9 @@ function doGet() {
  *  Foto de vehículo: { token, accion: 'vehiculo', fecha, matricula: '7863 MJR', modelo: 'Iveco',
  *                      tipo: 'Repostaje' | 'Taller' | 'Mantenimiento', paginas: ['<jpeg en base64>', ...] }
  *     → { ok: true, archivos: [{ id, nombre }] }
+ *  Ver una foto:     { token, accion: 'foto', id: '<id de Drive>' }
+ *     → { ok: true, mime, b64, nombre }   Solo fotos de la carpeta de albaranes o de la de vehículos,
+ *     así la app las enseña sin tener que compartir las carpetas de Drive.
  *  Si algo falla: { ok: false, error: 'texto' }
  */
 function doPost(e) {
@@ -74,6 +77,7 @@ function doPost(e) {
     const uid = comprobarSesion_(p.token);
     if (!uid) return json_({ ok: false, error: 'Sesión no válida. Sal y vuelve a entrar en la app.' });
 
+    if (p.accion === 'foto') return json_(verFoto_(p));
     const fecha = String(p.fecha || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json_({ ok: false, error: 'Fecha no válida.' });
     if (p.accion === 'vehiculo') return json_(guardarVehiculo_(p, fecha, uid));
@@ -158,6 +162,29 @@ function raizVehiculos_() {
   const v = sub_(padre, 'Vehículos');
   props.setProperty('CARPETA_VEHICULOS_ID', v.getId());
   return v;
+}
+
+/* ---------- ver fotos desde la app ---------- */
+
+// Devuelve una foto si está dentro de la carpeta de albaranes o de la de vehículos (hasta 4 niveles
+// por debajo). Nunca devuelve otros archivos del Drive.
+function verFoto_(p) {
+  const id = String(p.id || '');
+  if (!/^[A-Za-z0-9_-]{10,100}$/.test(id)) return { ok: false, error: 'Foto no válida.' };
+  const permitidas = [carpetaId_()];
+  const veh = (PropertiesService.getScriptProperties().getProperty('CARPETA_VEHICULOS_ID') || '').trim();
+  if (veh) permitidas.push(veh);
+  let f;
+  try { f = DriveApp.getFileById(id); } catch (e) { return { ok: false, error: 'No se encontró la foto en Drive.' }; }
+  if (!dentroDe_(f, permitidas, 4)) return { ok: false, error: 'Esa foto no es de la app.' };
+  const blob = f.getBlob();
+  return { ok: true, mime: blob.getContentType() || 'image/jpeg', b64: Utilities.base64Encode(blob.getBytes()), nombre: f.getName() };
+}
+function dentroDe_(item, ids, niveles) {
+  if (niveles <= 0) return false;
+  const ps = item.getParents();
+  while (ps.hasNext()) { const p = ps.next(); if (ids.indexOf(p.getId()) >= 0 || dentroDe_(p, ids, niveles - 1)) return true; }
+  return false;
 }
 
 /** Ejecutar a mano desde el editor para comprobar que la carpeta está bien configurada. */

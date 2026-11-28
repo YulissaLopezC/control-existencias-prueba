@@ -5,6 +5,7 @@
 // «Leer y comprobar»: el script lee las fotos con IA y relaciona cada línea con la lista del
 // almacén; la cuenta final (✓ / ⚠ / ✗ / ?) la hace comparar() aquí, no la IA.
 import { db, auth, doc, collection, setDoc, onSnapshot, MODO } from './fb.js?v=29';
+import './visor.js?v=1'; // «Ver 1, Ver 2…» se abren dentro de la app
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVvZly3YpUWv5W-vFE8PZT1y0Pf2zZhLpNcDmPLLlMcg0gnNpzDDE_ln-dB0tuGQA/exec';
 const LADO_MAX = 1600;   // píxeles del lado largo de cada foto
@@ -130,7 +131,7 @@ const nf = n => n == null || n === '' || isNaN(n) ? '—' : String(+Number(n).to
 const eur = n => n == null ? 'no figura' : Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
 
 function fichaAlbaran(id, a, hechos) {
-  const fotos = `<span class="alb-links">${a.fotos.map((f, i) => `<a href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">Ver ${i + 1}</a>`).join(' ')}</span>`;
+  const fotos = `<span class="alb-links">${a.fotos.map((f, i) => `<button type="button" class="alb-ver-foto" data-foto="${esc(f.id)}" data-foto-tit="Albarán ${esc(a.g)} · pág. ${i + 1}">Ver ${i + 1}</button>`).join(' ')}</span>`;
   const cab = `<div class="alb-fila"><span>${esc(hora(a.ts))} · ${esc(a.nombre)} · ${a.fotos.length} foto${a.fotos.length === 1 ? '' : 's'}</span>${fotos}</div>`;
   if (!a.comparacion) {
     if (leyendo === id || enCurso(a)) return `<li>${cab}<p class="alb-leyendo">⏳ Leyendo con IA… Puedes cerrar esta ventana: el resultado aparecerá aquí solo.</p></li>`;
