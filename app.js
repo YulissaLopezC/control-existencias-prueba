@@ -61,17 +61,26 @@ function cargarAlbaran() {
   }).catch(e => { console.error('albaran.js', e); albCargando = false; });
 }
 const verAlbaran = g => esDev() || esOficina() || (esChofer() && chofAlm(g) === yo.uid);
+// Vehículos (MAQUETA, fase 1, solo oficina): vehiculos.js solo se descarga cuando oficina lo abre.
+let veh = null, vehCargando = null;
+function conVehiculos(fn) {
+  if (!esOficina()) return;
+  if (veh) { fn(veh); return; }
+  if (!vehCargando) vehCargando = import('./vehiculos.js?v=1').then(m => { m.initVehiculos({ firma, toast: t => toast(t), hoy }); veh = m; return m; })
+    .catch(e => { console.error('vehiculos.js', e); vehCargando = null; toast('No se pudo abrir Vehículos'); });
+  vehCargando.then(m => m && fn(m));
+}
 const btnAlbaran = g => { if (!verAlbaran(g)) return ''; if (!alb) { cargarAlbaran(); return ''; } return alb.botonAlbaran(g); };
 function errGuardar(e) { console.error(e); toast(e && e.code === 'permission-denied' ? 'Sin permiso para guardar' : 'No se guardó. Revisa la conexión'); }
 function errConexion(e) { console.error(e); toast('No se pudo conectar con la base de datos'); }
 
 /* ================= vistas ================= */
-const VISTAS = ['login', 'recogida', 'clientes', 'reparto', 'traspasos', 'resumen', 'envios', 'oficina'];
+const VISTAS = ['login', 'recogida', 'clientes', 'reparto', 'traspasos', 'resumen', 'envios', 'oficina', 'vehiculos'];
 function vista() {
   if (!yo) return 'login';
   let v = (location.hash || '#recogida').slice(1);
   if (v === 'cargar') v = 'oficina';
-  if (v === 'oficina' && !esOficina()) v = 'recogida';
+  if ((v === 'oficina' || v === 'vehiculos') && !esOficina()) v = 'recogida'; // Vehículos: maqueta, solo oficina por ahora
   if (v === 'envios' && !esChofer()) v = esOficina() ? 'oficina' : 'recogida'; // oficina envía desde Oficina → Pedidos a proveedores
   return VISTAS.includes(v) && v !== 'login' ? v : 'recogida';
 }
@@ -93,13 +102,14 @@ $('#tabs-der').addEventListener('click', () => $('#tabs').scrollBy({ left: $('#t
 function route() {
   const v = vista();
   VISTAS.forEach(n => { $('#v-' + n).hidden = n !== v; const t = $('#t-' + n); if (t) { if (n === v) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); } });
-  $('#tabs').hidden = !yo; $('#t-oficina').hidden = !esOficina(); $('#t-envios').hidden = !esChofer();
+  $('#tabs').hidden = !yo; $('#t-oficina').hidden = !esOficina(); $('#t-envios').hidden = !esChofer(); $('#t-vehiculos').hidden = !esOficina();
   verTabActiva();
   $('#bar').hidden = !(v === 'recogida' || v === 'reparto');
   if (v === 'resumen') renderResumen();
   if (v === 'traspasos') renderTraspasos();
   if (v === 'clientes') renderClientes();
-  if (v === 'oficina') { renderOficina(); renderPedidos(); }
+  if (v === 'oficina') { renderOficina(); renderPedidos(); conVehiculos(m => m.renderAdmin($('#veh-admin'))); }
+  if (v === 'vehiculos') conVehiculos(m => m.renderVista($('#vehiculos')));
   if (v === 'envios') renderEnvios();
   renderStats();
   window.scrollTo(0, 0);
