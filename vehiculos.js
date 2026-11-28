@@ -4,8 +4,9 @@
 // - Oficina → «Vehículos»: carga masiva pegando la lista y alta manual; los que no se usan se
 //   desactivan (no se borran) para conservar su historial.
 // Datos: vehiculos/{MATRICULA} y vehiculos/{MATRICULA}/registros/{id}.
-// Fotos: se guardan en Drive con el mismo script de Google de los albaranes, en la carpeta
-// {fecha}/VEH {matrícula}. No se modifica el script.
+// Fotos: se guardan en Drive con el mismo script de Google de los albaranes, en
+// Vehículos / {matrícula} · {modelo} / Repostaje (acción «vehiculo» del script).
+// Se manda también g por si el script aún no está actualizado (entonces va a la carpeta de albaranes).
 import { db, auth, doc, collection, setDoc, onSnapshot, MODO } from './fb.js?v=29';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVvZly3YpUWv5W-vFE8PZT1y0Pf2zZhLpNcDmPLLlMcg0gnNpzDDE_ln-dB0tuGQA/exec';
@@ -200,7 +201,7 @@ async function guardarRep() {
     if (rep.foto && MODO === 'real') {
       const user = auth.currentUser; if (!user) throw new Error('Tienes que entrar con tu usuario.');
       const token = await user.getIdToken();
-      const r = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ token, fecha: ctx.hoy(), g: 'VEH ' + v.matricula, paginas: [await aBase64(rep.foto.blob)] }) });
+      const r = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ token, accion: 'vehiculo', fecha: ctx.hoy(), matricula: v.matricula, modelo: v.modelo, tipo: 'Repostaje', g: 'VEH ' + v.matricula, paginas: [await aBase64(rep.foto.blob)] }) });
       const res = await r.json().catch(() => ({ ok: false, error: 'Respuesta no válida del script de Google.' }));
       if (!res.ok) throw new Error(res.error || 'No se pudo guardar la foto en Drive.');
       fotos = res.archivos;

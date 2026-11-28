@@ -3,6 +3,11 @@
  *
  * Recibe desde la app las fotos de un albarán y las guarda en Google Drive:
  *   CARPETA / AAAA-MM-DD / almacén / almacén_AAAA-MM-DD_HHMMSS_p1.jpg
+ * Y las fotos de VEHÍCULOS (repostaje, taller, mantenimiento) en una carpeta aparte:
+ *   Vehículos / 7863 MJR · Iveco / Repostaje / 7863MJR_AAAA-MM-DD_HHMMSS_p1.jpg
+ *   La carpeta «Vehículos» es la de la propiedad CARPETA_VEHICULOS_ID si se pone; si no, el
+ *   script la crea junto a la carpeta de albaranes (en la misma carpeta que la contiene).
+ *   Cada vehículo se busca por su matrícula, así que cambiar el modelo no crea otra carpeta.
  * Antes de guardar comprueba que quien envía ha entrado en la app (sesión de Firebase),
  * para que nadie de fuera pueda subir archivos.
  * También LEE el albarán con IA (EN PRUEBAS, con Gemini): recibe la lista de ese almacén,
@@ -18,6 +23,7 @@
  *   2. Borrar lo que haya y pegar este archivo entero. Guardar.
  *   3. Configuración del proyecto (rueda) → Propiedades de la secuencia de comandos → Añadir:
  *        CARPETA_ID = el ID de la carpeta de Drive (lo que va después de /folders/ en su enlace)
+        CARPETA_VEHICULOS_ID = (opcional) el ID de la carpeta «Vehículos»; si no se pone, se crea sola
         GEMINI_API_KEY = la clave de Gemini (aistudio.google.com → Get API key). Nunca en el repo.
         GEMINI_MODELO = (opcional) el modelo de Gemini; si no se pone, gemini-flash-latest
         GEMINI_PENSAR = (opcional) cuánto «piensa» Gemini: minimal, low, medium o high; por defecto low
@@ -56,6 +62,9 @@ function doGet() {
  *     → { ok: true, lectura: {...}, modelo }
  *     Además guarda la lectura en el registro del albarán (dias/{fecha}/albaranes/{id}) con la
  *     sesión del usuario, así se guarda aunque el móvil deje de esperar la respuesta.
+ *  Foto de vehículo: { token, accion: 'vehiculo', fecha, matricula: '7863 MJR', modelo: 'Iveco',
+ *                      tipo: 'Repostaje' | 'Taller' | 'Mantenimiento', paginas: ['<jpeg en base64>', ...] }
+ *     → { ok: true, archivos: [{ id, nombre }] }
  *  Si algo falla: { ok: false, error: 'texto' }
  */
 function doPost(e) {
@@ -67,6 +76,7 @@ function doPost(e) {
 
     const fecha = String(p.fecha || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json_({ ok: false, error: 'Fecha no válida.' });
+    if (p.accion === 'vehiculo') return json_(guardarVehiculo_(p, fecha, uid));
     const g = String(p.g || '').replace(/[^A-Za-z0-9 _.\-]/g, '').trim().slice(0, 40);
     if (!g) return json_({ ok: false, error: 'Almacén no válido.' });
     if (p.accion === 'leer') return json_(leer_(p, fecha, g));
@@ -94,10 +104,67 @@ function doPost(e) {
   }
 }
 
+/* ---------- fotos de vehículos ---------- */
+
+const TIPOS_VEH = ['Repostaje', 'Taller', 'Mantenimiento'];
+const limpiar_ = (s, n) => String(s || '').replace(/[\/\\:*?"<>|#%]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+
+function guardarVehiculo_(p, fecha, uid) {
+  const mat = limpiar_(p.matricula, 20).toUpperCase();
+  if (!mat) return { ok: false, error: 'Matrícula no válida.' };
+  const tipo = TIPOS_VEH.indexOf(p.tipo) >= 0 ? p.tipo : null;
+  if (!tipo) return { ok: false, error: 'Tipo de registro no válido.' };
+  const paginas = Array.isArray(p.paginas) ? p.paginas : [];
+  if (!paginas.length) return { ok: false, error: 'No llegó ninguna foto.' };
+  if (paginas.length > MAX_PAGINAS) return { ok: false, error: `Máximo ${MAX_PAGINAS} fotos.` };
+  const carpeta = carpetaVehiculo_(mat, limpiar_(p.modelo, 40), tipo);
+  const hora = Utilities.formatDate(new Date(), ZONA, 'HHmmss');
+  const base = mat.replace(/[^A-Z0-9]/g, '');
+  const archivos = paginas.map((b64, i) => {
+    const bytes = Utilities.base64Decode(String(b64).replace(/^data:[^,]*,/, ''));
+    if (bytes.length > MAX_BYTES_PAGINA) throw new Error(`La foto ${i + 1} es demasiado grande.`);
+    const nombre = `${base}_${fecha}_${hora}_p${i + 1}.jpg`;
+    const f = carpeta.createFile(Utilities.newBlob(bytes, 'image/jpeg', nombre));
+    f.setDescription(`${tipo} · ${mat} · subida desde la app por ${uid}`);
+    return { id: f.getId(), nombre };
+  });
+  return { ok: true, archivos };
+}
+
+// Vehículos / «7863 MJR · Iveco» / Repostaje. El vehículo se busca por la matrícula al principio
+// del nombre de la carpeta, para que un cambio de modelo no cree otra carpeta.
+function carpetaVehiculo_(mat, modelo, tipo) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const raiz = raizVehiculos_();
+    let veh = null;
+    const it = raiz.getFolders();
+    while (it.hasNext()) { const f = it.next(); const n = f.getName(); if (n === mat || n.indexOf(mat + ' ·') === 0) { veh = f; break; } }
+    if (!veh) veh = raiz.createFolder(modelo ? `${mat} · ${modelo}` : mat);
+    return sub_(veh, tipo);
+  } finally {
+    lock.releaseLock();
+  }
+}
+function raizVehiculos_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = (props.getProperty('CARPETA_VEHICULOS_ID') || '').trim();
+  if (id) return DriveApp.getFolderById(id);
+  // Sin propiedad: «Vehículos» junto a la carpeta de albaranes, y se recuerda para la próxima vez.
+  const alb = DriveApp.getFolderById(carpetaId_());
+  const padres = alb.getParents();
+  const padre = padres.hasNext() ? padres.next() : DriveApp.getRootFolder();
+  const v = sub_(padre, 'Vehículos');
+  props.setProperty('CARPETA_VEHICULOS_ID', v.getId());
+  return v;
+}
+
 /** Ejecutar a mano desde el editor para comprobar que la carpeta está bien configurada. */
 function probarCarpeta() {
   const raiz = DriveApp.getFolderById(carpetaId_());
   console.log('Carpeta OK: ' + raiz.getName());
+  console.log('Carpeta de vehículos OK: ' + raizVehiculos_().getName());
 }
 
 /* ---------- lectura con IA ---------- */

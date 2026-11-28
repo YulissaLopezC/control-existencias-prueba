@@ -66,7 +66,7 @@ let veh = null, vehCargando = null;
 function conVehiculos(fn) {
   if (!esOficina()) return;
   if (veh) { fn(veh); return; }
-  if (!vehCargando) vehCargando = import('./vehiculos.js?v=1').then(m => { m.initVehiculos({ firma, toast: t => toast(t), hoy }); veh = m; return m; })
+  if (!vehCargando) vehCargando = import('./vehiculos.js?v=2').then(m => { m.initVehiculos({ firma, toast: t => toast(t), hoy }); veh = m; return m; })
     .catch(e => { console.error('vehiculos.js', e); vehCargando = null; toast('No se pudo abrir Vehículos'); });
   vehCargando.then(m => m && fn(m));
 }
